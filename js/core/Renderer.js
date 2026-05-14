@@ -10,14 +10,24 @@ export class Renderer {
 
         this.selectionRect = new Konva.Rect({ fill: 'rgba(56, 189, 248, 0.2)', stroke: '#38bdf8', strokeWidth: 1, visible: false });
         this.lassoLine = new Konva.Line({ stroke: '#38bdf8', strokeWidth: 2, fill: 'rgba(56, 189, 248, 0.2)', closed: true, visible: false, tension: 0 });
-        this.layers.ui.add(this.selectionRect, this.lassoLine);
+
+        // 测量卡尺工具图元
+        this.measureLine = new Konva.Line({ stroke: '#10b981', strokeWidth: 2, dash: [4, 4], visible: false });
+        this.measureText = new Konva.Text({ text: '', fontSize: 14, fill: '#10b981', backgroundColor: '#0f172a', padding: 4, cornerRadius: 4, visible: false, fontStyle: 'bold' });
+
+        this.dragTrailGroup = new Konva.Group();
+        this.remoteGhostsGroup = new Konva.Group();
+        this.layers.ui.add(this.selectionRect, this.lassoLine, this.measureLine, this.measureText, this.dragTrailGroup, this.remoteGhostsGroup);
 
         this.isSelecting = false; this.selectionStartPos = { x: 0, y: 0 }; this.lassoPoints = [];
+        this.isMeasuring = false;
         this.remoteCursors = {};
 
         this.bindSystemEvents();
         eventBus.on('state:changed', ({ doc, ui }) => this.renderAll(doc, ui));
         eventBus.on('network:cursor', ({ peer, pos }) => this.renderRemoteCursor(peer, pos));
+        eventBus.on('network:ghost_move', ({ peer, cells }) => this.renderRemoteGhost(peer, cells));
+        eventBus.on('network:ghost_end', ({ peer }) => this.clearRemoteGhost(peer));
     }
 
     bindSystemEvents() {
@@ -33,9 +43,20 @@ export class Renderer {
         this.stage.on('mousedown', (e) => {
             const tool = state.ui.currentTool;
             if (e.evt.button === 1 || e.evt.button === 2 || tool === 'pan' || (tool === 'pointer' && e.target === this.stage)) { this.stage.draggable(true); return; }
+
+            this.selectionStartPos = this.stage.getRelativePointerPosition();
+
+            // ✅ 测量工具逻辑
+            if (tool === 'measure') {
+                this.isMeasuring = true;
+                this.measureLine.points([this.selectionStartPos.x, this.selectionStartPos.y, this.selectionStartPos.x, this.selectionStartPos.y]);
+                this.measureLine.visible(true);
+                this.measureText.visible(true);
+                return;
+            }
+
             if ((tool !== 'select-box' && tool !== 'select-lasso') || e.target !== this.stage) return;
             this.isSelecting = true;
-            this.selectionStartPos = this.stage.getRelativePointerPosition();
             if (tool === 'select-box') { this.selectionRect.position(this.selectionStartPos); this.selectionRect.width(0); this.selectionRect.height(0); this.selectionRect.visible(true); }
             else if (tool === 'select-lasso') { this.lassoPoints = [this.selectionStartPos.x, this.selectionStartPos.y]; this.lassoLine.points(this.lassoPoints); this.lassoLine.visible(true); }
             if (!e.evt.ctrlKey && !e.evt.metaKey && !e.evt.shiftKey) state.clearSelection();
@@ -44,21 +65,29 @@ export class Renderer {
         this.stage.on('click', (e) => { if (state.ui.currentTool === 'pointer' && e.target === this.stage) state.clearSelection(); });
 
         let lastCursorTime = 0;
-        // ✅ 核心修复：使用 pointermove 捕获任何细微滑动，极速同步！
         this.stage.on('pointermove', () => {
             const pos = this.stage.getRelativePointerPosition();
             if (!pos) return;
 
-            // ✅ 视差转换算法：如果我是反面视角，我的真实物理坐标需要用 stage.width() 去翻转！
-            let broadcastPos = { x: pos.x, y: pos.y };
-            if (state.ui.viewMode === 'back') {
-                broadcastPos.x = this.stage.width() - pos.x;
+            // 完美的绝对坐标逆向转换
+            let absoluteX = state.ui.viewMode === 'back' ? this.stage.width() - pos.x : pos.x;
+
+            if (Date.now() - lastCursorTime > 30) {
+                state.broadcastCursor({ x: absoluteX, y: pos.y });
+                lastCursorTime = Date.now();
             }
 
-            // 以 30ms (约33fps) 节流广播，丝滑无比且不卡网络
-            if (Date.now() - lastCursorTime > 30) {
-                state.broadcastCursor(broadcastPos);
-                lastCursorTime = Date.now();
+            // ✅ 测量尺拉伸计算逻辑
+            if (this.isMeasuring) {
+                this.measureLine.points([this.selectionStartPos.x, this.selectionStartPos.y, pos.x, pos.y]);
+                const dx = pos.x - this.selectionStartPos.x;
+                const dy = pos.y - this.selectionStartPos.y;
+                // 1像素 ≈ 0.5毫米 (因为我们设定的 18650 电池半径是 18px = 物理9mm)
+                const distanceMM = (Math.sqrt(dx * dx + dy * dy) * 0.5).toFixed(1);
+
+                this.measureText.text(`${distanceMM} mm`);
+                this.measureText.position({ x: this.selectionStartPos.x + dx / 2 + 10, y: this.selectionStartPos.y + dy / 2 + 10 });
+                return;
             }
 
             if (!this.isSelecting) return;
@@ -68,6 +97,14 @@ export class Renderer {
 
         this.stage.on('mouseup', (e) => {
             this.stage.draggable(false);
+
+            if (this.isMeasuring) {
+                this.isMeasuring = false;
+                this.measureLine.visible(false);
+                this.measureText.visible(false);
+                return;
+            }
+
             if (!this.isSelecting) return;
             this.isSelecting = false;
             let newlySelectedIds = [];
@@ -95,27 +132,55 @@ export class Renderer {
         window.addEventListener('resize', () => { this.stage.width(this.container.clientWidth); this.stage.height(this.container.clientHeight); state.notify(); });
     }
 
-    // ✅ 精确渲染对方鼠标
+    getPeerColor(peerId) {
+        let hash = 0; for (let i = 0; i < peerId.length; i++) hash = peerId.charCodeAt(i) + ((hash << 5) - hash);
+        return `hsl(${Math.abs(hash % 360)}, 85%, 60%)`;
+    }
+
     renderRemoteCursor(peerId, pos) {
         if (!state.ui.layerVisibility || !state.ui.layerVisibility.ui) return;
 
-        // 视差转换算法：接收到的 pos.x 是绝对物理坐标，基于我自己的视角再次渲染转换
-        let renderX = pos.x;
-        if (state.ui.viewMode === 'back') {
-            renderX = this.stage.width() - pos.x;
-        }
+        let renderX = state.ui.viewMode === 'back' ? this.stage.width() - pos.x : pos.x;
 
         if (!this.remoteCursors[peerId]) {
             const group = new Konva.Group();
-            const arrow = new Konva.Path({ data: 'M0,0 L12,12 L5,14 L0,22 Z', fill: '#ef4444', shadowColor: '#000', shadowBlur: 4, shadowOffset: { x: 2, y: 2 }, shadowOpacity: 0.5 });
-            const tag = new Konva.Text({ text: peerId, x: 14, y: 14, fill: 'white', backgroundColor: '#ef4444', padding: 2, fontSize: 10, cornerRadius: 2 });
+            const color = this.getPeerColor(peerId);
+            const arrow = new Konva.Path({ data: 'M0,0 L12,12 L5,14 L0,22 Z', fill: color, shadowColor: '#000', shadowBlur: 4, shadowOffset: { x: 2, y: 2 }, shadowOpacity: 0.5 });
+            const tag = new Konva.Text({ text: peerId, x: 14, y: 14, fill: '#0f172a', backgroundColor: color, padding: 3, fontSize: 10, cornerRadius: 4, fontStyle: 'bold' });
             group.add(arrow, tag);
             this.layers.ui.add(group);
             this.remoteCursors[peerId] = group;
         }
-
         this.remoteCursors[peerId].position({ x: renderX, y: pos.y });
         this.layers.ui.batchDraw();
+    }
+
+    // ✅ 高级残影渲染系统：带有对方的署名标签，视觉防冲突
+    renderRemoteGhost(peerId, cellsData) {
+        let peerGroup = this.remoteGhostsGroup.findOne(`#ghost-${peerId}`);
+        if (!peerGroup) {
+            peerGroup = new Konva.Group({ id: `ghost-${peerId}` });
+            this.remoteGhostsGroup.add(peerGroup);
+        }
+        peerGroup.destroyChildren();
+
+        const color = this.getPeerColor(peerId);
+        cellsData.forEach((ghost, index) => {
+            let renderX = state.ui.viewMode === 'back' ? this.stage.width() - ghost.cx : ghost.cx;
+            // 虚线电芯轮廓
+            peerGroup.add(new Konva.Circle({ x: renderX, y: ghost.cy, radius: state.ui.cellRadius, stroke: color, strokeWidth: 2, dash: [4, 4], opacity: 0.8 }));
+
+            // 在这一坨残影的第一个元素上方打上对方名字标签
+            if (index === 0) {
+                peerGroup.add(new Konva.Text({ text: `${peerId} 拖拽中...`, x: renderX - 20, y: ghost.cy - 35, fill: color, fontSize: 11, fontStyle: 'bold' }));
+            }
+        });
+        this.layers.ui.batchDraw();
+    }
+
+    clearRemoteGhost(peerId) {
+        const peerGroup = this.remoteGhostsGroup.findOne(`#ghost-${peerId}`);
+        if (peerGroup) { peerGroup.destroy(); this.layers.ui.batchDraw(); }
     }
 
     isPointInPolygon(x, y, points) { let inside = false; for (let i = 0, j = points.length - 2; i < points.length; j = i, i += 2) { let intersect = ((points[i + 1] > y) !== (points[j + 1] > y)) && (x < (points[j] - points[i]) * (y - points[i + 1]) / (points[j + 1] - points[i + 1]) + points[i]); if (intersect) inside = !inside; } return inside; }
@@ -124,9 +189,7 @@ export class Renderer {
         this.layers.busbar.visible(ui.layerVisibility.busbar);
         this.layers.cell.visible(ui.layerVisibility.cell);
         this.layers.ui.visible(ui.layerVisibility.ui);
-
         this.renderBusbars(doc, ui); this.renderCells(doc, ui);
-
         const cellEl = document.getElementById('cell-count'); const wireEl = document.getElementById('wire-count');
         if (cellEl) cellEl.innerText = doc.cells.length; if (wireEl) wireEl.innerText = doc.busbars.length;
     }
@@ -154,27 +217,57 @@ export class Renderer {
 
             cellGroup.on('dragstart', (e) => {
                 if (!ui.selectedCells.includes(cell.id)) { if (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey) state.selectCells([...ui.selectedCells, cell.id]); else state.selectCells([cell.id]); }
-                this.dragStartPositions = {}; doc.cells.forEach(c => { if (ui.selectedCells.includes(c.id)) this.dragStartPositions[c.id] = { cx: c.cx, cy: c.cy }; });
+                this.dragStartPositions = {};
+                this.dragTrailGroup.destroyChildren();
+
+                doc.cells.forEach(c => {
+                    if (ui.selectedCells.includes(c.id)) {
+                        this.dragStartPositions[c.id] = { cx: c.cx, cy: c.cy };
+                        const trailLine = new Konva.Line({ id: `trail-${c.id}`, points: [], stroke: '#38bdf8', strokeWidth: 1.5, dash: [4, 4], opacity: 0.8 });
+                        this.dragTrailGroup.add(trailLine);
+                    }
+                });
             });
 
             cellGroup.on('dragmove', (e) => {
                 if (ui.isSnapping) { const snap = ui.gridSize / 2; e.target.x(Math.round(e.target.x() / snap) * snap); e.target.y(Math.round(e.target.y() / snap) * snap); }
                 let newX = e.target.x(); let dx = (ui.viewMode === 'back' ? this.stage.width() - newX : newX) - this.dragStartPositions[cell.id].cx;
                 let dy = e.target.y() - this.dragStartPositions[cell.id].cy;
+
+                let ghostPayload = [];
+
                 doc.cells.forEach(c => {
                     if (ui.selectedCells.includes(c.id) && !c.isLocked) {
                         c.cx = this.dragStartPositions[c.id].cx + dx; c.cy = this.dragStartPositions[c.id].cy + dy;
                         if (c.id !== cell.id) { let node = this.layers.cell.findOne(`#${c.id}`); if (node) { node.x(ui.viewMode === 'back' ? this.stage.width() - c.cx : c.cx); node.y(c.cy); } }
+
+                        const trail = this.dragTrailGroup.findOne(`#trail-${c.id}`);
+                        if (trail) {
+                            let sX = ui.viewMode === 'back' ? this.stage.width() - this.dragStartPositions[c.id].cx : this.dragStartPositions[c.id].cx;
+                            let cX = ui.viewMode === 'back' ? this.stage.width() - c.cx : c.cx;
+                            trail.points([sX, this.dragStartPositions[c.id].cy, cX, c.cy]);
+                        }
+                        ghostPayload.push({ id: c.id, cx: c.cx, cy: c.cy });
                     }
                 });
                 this.renderBusbars(doc, ui);
 
-                // 拖动时也广播鼠标位置（保证最高帧率同步）
-                let broadcastPos = { x: pos.x, y: pos.y };
-                if (state.ui.viewMode === 'back') broadcastPos.x = this.stage.width() - pos.x;
-                state.broadcastCursor(broadcastPos);
+                // ✅ 彻底修复拖动时坐标错位问题：使用纯内建 API 获取当前内部指针绝对位置进行广播！
+                const pointerPos = this.stage.getRelativePointerPosition();
+                if (pointerPos) {
+                    let absoluteX = state.ui.viewMode === 'back' ? this.stage.width() - pointerPos.x : pointerPos.x;
+                    state.broadcastCursor({ x: absoluteX, y: pointerPos.y });
+                }
+
+                state.broadcastGhostMove(ghostPayload);
             });
-            cellGroup.on('dragend', () => state.commitAction(ui.selectedCells.length > 1 ? '批量移动' : '移动电芯'));
+
+            cellGroup.on('dragend', () => {
+                this.dragTrailGroup.destroyChildren();
+                state.broadcastGhostEnd();
+                state.commitAction(ui.selectedCells.length > 1 ? '批量移动' : '移动电芯');
+            });
+
             cellGroup.on('click', (e) => { if (e.evt.detail === 1 && ui.currentTool !== 'pan') state.handleCellClick(cell.id, e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey); });
 
             if (isSelected) cellGroup.add(new Konva.Circle({ radius: ui.cellRadius + 6, fill: 'rgba(56, 189, 248, 0.3)', stroke: '#38bdf8', strokeWidth: 2 }));
@@ -190,7 +283,7 @@ export class Renderer {
             this.layers.cell.add(cellGroup);
         });
 
-        if (ui.currentTool === 'pan') this.container.style.cursor = 'grab'; else if (ui.currentTool === 'wire' || ui.currentTool.includes('select')) this.container.style.cursor = 'crosshair'; else this.container.style.cursor = 'default';
+        if (ui.currentTool === 'pan') this.container.style.cursor = 'grab'; else if (ui.currentTool === 'measure') this.container.style.cursor = 'crosshair'; else if (ui.currentTool === 'wire' || ui.currentTool.includes('select')) this.container.style.cursor = 'crosshair'; else this.container.style.cursor = 'default';
         this.layers.cell.draw();
     }
 }

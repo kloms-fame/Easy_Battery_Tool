@@ -7,11 +7,10 @@ class State {
         this.idCounters = { cell: 1, busbar: 1 };
         this.history = []; this.historyIndex = -1; this.clipboard = { cells: [], busbars: [] };
 
-        // P2P 引擎核心
         this.peer = null;
         this.myPeerId = null;
         this.connections = [];
-        this.connectedPeers = []; // ✅ 纯数据驱动的字符串数组，通知UI安全渲染
+        this.connectedPeers = [];
     }
 
     initEmptyState() { this.commitAction('初始空画布'); }
@@ -32,12 +31,10 @@ class State {
     saveToLocal() { localStorage.setItem('packArchitectProject_V6', JSON.stringify({ doc: this.doc, idCounters: this.idCounters })); }
     loadFromLocal() { const dataStr = localStorage.getItem('packArchitectProject_V6'); if (dataStr) { try { const data = JSON.parse(dataStr); this.doc = data.doc; this.idCounters = data.idCounters; return true; } catch (e) { return false; } } return false; }
 
-    // ================= P2P 稳定双工联机引擎 =================
     initNetwork() {
         const shortId = Math.random().toString(36).substring(2, 6).toUpperCase();
         this.myPeerId = `PACK-${shortId}`;
         this.peer = new Peer(this.myPeerId);
-
         this.peer.on('open', (id) => eventBus.emit('network:ready', id));
         this.peer.on('error', (err) => eventBus.emit('network:error', err));
         this.peer.on('connection', (conn) => eventBus.emit('network:incoming', conn));
@@ -55,6 +52,7 @@ class State {
         this.setupConnection(conn);
         const handleOpen = () => {
             this.addConnection(conn);
+            // ✅ 发送全量同步包时，不再包含 viewMode 属性
             conn.send({ type: 'sync_full', doc: this.doc, idCounters: this.idCounters });
         };
         if (conn.open) handleOpen(); else conn.on('open', handleOpen);
@@ -64,7 +62,7 @@ class State {
         if (!this.connections.find(c => c.peer === conn.peer)) {
             this.connections.push(conn);
             this.connectedPeers.push(conn.peer);
-            eventBus.emit('network:list_changed', this.connectedPeers); // 安全驱动 UI
+            eventBus.emit('network:list_changed', this.connectedPeers);
         }
     }
 
@@ -77,16 +75,17 @@ class State {
     setupConnection(conn) {
         conn.on('data', (msg) => {
             if (msg.type === 'sync_full') {
-                this.doc = msg.doc;
-                this.idCounters = msg.idCounters;
-                this.clearSelection();
-                this.notify();
-                eventBus.emit('network:syncing');
+                this.doc = msg.doc; this.idCounters = msg.idCounters;
+                // ✅ 绝对不再同步对方的 viewMode
+                this.clearSelection(); this.notify(); eventBus.emit('network:syncing');
             } else if (msg.type === 'cursor') {
                 eventBus.emit('network:cursor', msg);
+            } else if (msg.type === 'ghost_move') {
+                eventBus.emit('network:ghost_move', msg);
+            } else if (msg.type === 'ghost_end') {
+                eventBus.emit('network:ghost_end', msg);
             }
         });
-
         conn.on('close', () => this.removeConnection(conn.peer));
         conn.on('error', () => this.removeConnection(conn.peer));
     }
@@ -100,7 +99,18 @@ class State {
     broadcastCursor(pos) {
         if (this.connections.length === 0) return;
         const payload = { type: 'cursor', peer: this.myPeerId, pos: pos };
-        // 使用 UDP 风格发送鼠标坐标，不阻塞主传输
+        this.connections.forEach(conn => { if (conn.open) conn.send(payload); });
+    }
+
+    broadcastGhostMove(cellsData) {
+        if (this.connections.length === 0) return;
+        const payload = { type: 'ghost_move', peer: this.myPeerId, cells: cellsData };
+        this.connections.forEach(conn => { if (conn.open) conn.send(payload); });
+    }
+
+    broadcastGhostEnd() {
+        if (this.connections.length === 0) return;
+        const payload = { type: 'ghost_end', peer: this.myPeerId };
         this.connections.forEach(conn => { if (conn.open) conn.send(payload); });
     }
 
@@ -110,7 +120,13 @@ class State {
         this.removeConnection(peerId);
     }
 
-    // ================= 基础逻辑 =================
+    // ✅ 切换视角时，仅影响本地自己，不再广播给其他连接者
+    toggleViewMode() {
+        this.ui.viewMode = this.ui.viewMode === 'front' ? 'back' : 'front';
+        this.ui.wireStartCell = null;
+        this.notify();
+    }
+
     toggleLockSelected() { if (this.ui.selectedCells.length === 0) return; const allLocked = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id)).every(c => c.isLocked); this.doc.cells.forEach(c => { if (this.ui.selectedCells.includes(c.id)) c.isLocked = !allLocked; }); this.commitAction(allLocked ? '解锁' : '锁定'); }
     deleteSelected() { if (this.ui.selectedCells.length === 0) return; const cellsToDelete = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id) && !c.isLocked).map(c => c.id); if (cellsToDelete.length === 0) return; this.doc.cells = this.doc.cells.filter(c => !cellsToDelete.includes(c.id)); this.doc.busbars = this.doc.busbars.filter(b => !cellsToDelete.includes(b.from) && !cellsToDelete.includes(b.to)); this.ui.selectedCells = this.ui.selectedCells.filter(id => !cellsToDelete.includes(id)); this.commitAction('删除'); }
     copySelected() { this.clipboard.cells = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id)).map(c => ({ ...c })); this.clipboard.busbars = this.doc.busbars.filter(b => this.ui.selectedCells.includes(b.from) && this.ui.selectedCells.includes(b.to)).map(b => ({ ...b })); }
@@ -126,7 +142,6 @@ class State {
     clearSelection() { this.ui.selectedCells = []; this.notify(); }
     setTool(tool) { this.ui.currentTool = tool; this.ui.wireStartCell = null; this.notify(); }
     toggleSnap() { this.ui.isSnapping = !this.ui.isSnapping; this.notify(); }
-    toggleViewMode() { this.ui.viewMode = this.ui.viewMode === 'front' ? 'back' : 'front'; this.ui.wireStartCell = null; this.notify(); }
     notify() { this.saveToLocal(); eventBus.emit('state:changed', { doc: this.doc, ui: this.ui, history: this.history, historyIndex: this.historyIndex }); }
 }
 export const state = new State();

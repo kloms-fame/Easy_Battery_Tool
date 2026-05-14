@@ -1,7 +1,6 @@
 import { state } from '../core/State.js';
 import { eventBus } from '../core/EventBus.js';
 
-// ✅ 防御性 DOM 操作工具函数
 const safelySetText = (id, text) => { const el = document.getElementById(id); if (el) el.innerText = text; };
 const safelyToggleClass = (id, className, condition) => { const el = document.getElementById(id); if (el) el.classList.toggle(className, condition); };
 
@@ -36,7 +35,6 @@ export function initToolbar(renderer) {
 
     document.querySelectorAll('.layer-item[data-layer]').forEach(item => { item.onclick = () => state.toggleLayerVisibility(item.getAttribute('data-layer')); });
 
-    // ================= 极度健壮的双工联机交互 =================
     const fabContainer = document.getElementById('fab-container');
     const networkPanel = document.getElementById('network-panel');
     const modalOverlay = document.getElementById('modal-overlay');
@@ -45,13 +43,10 @@ export function initToolbar(renderer) {
 
     eventBus.on('network:ready', (id) => {
         const idDisplay = document.getElementById('my-peer-id');
-        if (idDisplay) {
-            idDisplay.innerText = id;
-            idDisplay.onclick = () => { navigator.clipboard.writeText(id); idDisplay.innerText = "已复制！"; setTimeout(() => idDisplay.innerText = id, 1000); };
-        }
+        if (idDisplay) { idDisplay.innerText = id; idDisplay.onclick = () => { navigator.clipboard.writeText(id); idDisplay.innerText = "已复制！"; setTimeout(() => idDisplay.innerText = id, 1000); }; }
     });
 
-    eventBus.on('network:error', (err) => { alert("联机握手失败：" + err.type); safelySetText('btn-connect-peer', '连接'); });
+    eventBus.on('network:error', (err) => { alert("联机信号中继失败：" + err.type); safelySetText('btn-connect-peer', '连接'); });
 
     document.getElementById('fab-main').onclick = () => fabContainer.classList.toggle('open');
     document.getElementById('btn-lan-scan').onclick = () => { if (networkPanel) networkPanel.style.display = networkPanel.style.display === 'none' ? 'block' : 'none'; if (fabContainer) fabContainer.classList.remove('open'); };
@@ -62,20 +57,15 @@ export function initToolbar(renderer) {
         if (targetId && targetId !== state.myPeerId) { safelySetText('btn-connect-peer', '握手中...'); state.connectToPeer(targetId); }
     };
 
-    eventBus.on('network:incoming', (conn) => {
-        pendingConnection = conn; safelySetText('req-device-name', conn.peer); if (modalOverlay) modalOverlay.style.display = 'flex';
-    });
+    eventBus.on('network:incoming', (conn) => { pendingConnection = conn; safelySetText('req-device-name', conn.peer); if (modalOverlay) modalOverlay.style.display = 'flex'; });
 
     document.getElementById('btn-accept-conn').onclick = () => { if (modalOverlay) modalOverlay.style.display = 'none'; if (pendingConnection) { state.acceptConnection(pendingConnection); if (networkPanel) networkPanel.style.display = 'block'; pendingConnection = null; } };
     document.getElementById('btn-reject-conn').onclick = () => { if (modalOverlay) modalOverlay.style.display = 'none'; if (pendingConnection) { pendingConnection.close(); pendingConnection = null; } };
 
-    // ✅ 数据驱动渲染设备列表（绝对不会出现空白 Bug）
     eventBus.on('network:list_changed', (peers) => {
         const listEl = document.getElementById('connected-list');
         if (!listEl) return;
-
-        listEl.innerHTML = '';
-        safelySetText('btn-connect-peer', '连接');
+        listEl.innerHTML = ''; safelySetText('btn-connect-peer', '连接');
 
         if (peers.length === 0) {
             listEl.innerHTML = '<div id="no-connection-tip" style="font-size: 11px; color: #475569; text-align: center; padding: 10px;">暂无连接</div>';
@@ -84,16 +74,9 @@ export function initToolbar(renderer) {
         } else {
             safelySetText('p2p-status-indicator', `📡 局域网: ${peers.length}人在线`);
             if (statusIndicator) statusIndicator.classList.add('network-online');
-
             peers.forEach(peerId => {
-                const div = document.createElement('div');
-                div.className = 'layer-item';
-                div.style.justifyContent = 'space-between';
-                div.style.borderLeft = '3px solid #10b981';
-                div.innerHTML = `
-                    <span style="color:#10b981; font-size:12px; font-weight:bold;">⚡ ${peerId}</span>
-                    <button class="btn-disconnect" style="width:auto; padding: 2px 5px; margin:0; background:#7f1d1d; color:white; border:none; border-radius:4px; font-size:10px;">断开</button>
-                `;
+                const div = document.createElement('div'); div.className = 'layer-item'; div.style.justifyContent = 'space-between'; div.style.borderLeft = '3px solid #10b981';
+                div.innerHTML = `<span style="color:#10b981; font-size:12px; font-weight:bold;">⚡ ${peerId}</span><button class="btn-disconnect" style="width:auto; padding: 2px 5px; margin:0; background:#7f1d1d; color:white; border:none; border-radius:4px; font-size:10px;">断开</button>`;
                 div.querySelector('.btn-disconnect').onclick = () => state.disconnectPeer(peerId);
                 listEl.appendChild(div);
             });
@@ -102,19 +85,22 @@ export function initToolbar(renderer) {
 
     let syncTimeout;
     eventBus.on('network:syncing', () => {
-        safelySetText('p2p-status-indicator', '📡 接收同步数据...');
-        if (statusIndicator) statusIndicator.classList.add('network-syncing');
-        clearTimeout(syncTimeout);
-        syncTimeout = setTimeout(() => {
-            if (statusIndicator) statusIndicator.classList.remove('network-syncing');
-            safelySetText('p2p-status-indicator', `📡 局域网: ${state.connectedPeers.length}人在线`);
-        }, 500);
+        safelySetText('p2p-status-indicator', '📡 接收同步数据...'); if (statusIndicator) statusIndicator.classList.add('network-syncing');
+        clearTimeout(syncTimeout); syncTimeout = setTimeout(() => { if (statusIndicator) statusIndicator.classList.remove('network-syncing'); safelySetText('p2p-status-indicator', `📡 局域网: ${state.connectedPeers.length}人在线`); }, 500);
     });
 
     // ==========================================
-    document.getElementById('tool-pointer').onclick = () => state.setTool('pointer'); document.getElementById('tool-select-box').onclick = () => state.setTool('select-box'); document.getElementById('tool-select-lasso').onclick = () => state.setTool('select-lasso'); document.getElementById('tool-polarity').onclick = () => state.setTool('polarity'); document.getElementById('tool-pan').onclick = () => state.setTool('pan'); document.getElementById('tool-wire').onclick = () => state.setTool('wire'); document.getElementById('btn-undo').onclick = () => state.undo(); document.getElementById('btn-redo').onclick = () => state.redo();
+    document.getElementById('tool-pointer').onclick = () => state.setTool('pointer');
+    document.getElementById('tool-select-box').onclick = () => state.setTool('select-box');
+    document.getElementById('tool-select-lasso').onclick = () => state.setTool('select-lasso');
+    document.getElementById('tool-polarity').onclick = () => state.setTool('polarity');
+    document.getElementById('tool-pan').onclick = () => state.setTool('pan');
+    document.getElementById('tool-wire').onclick = () => state.setTool('wire');
+    document.getElementById('tool-measure').onclick = () => state.setTool('measure'); // ✅ 绑定卡尺
+    document.getElementById('btn-undo').onclick = () => state.undo(); document.getElementById('btn-redo').onclick = () => state.redo();
+
     window.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; if (e.code === 'Space') { e.preventDefault(); renderer.stage.draggable(true); document.body.classList.add('grabbing-mode'); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); state.undo(); } if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); state.redo(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelected(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteSelected(); } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); state.deleteSelected(); } });
-    window.addEventListener('keyup', (e) => { if (e.code === 'Space') { renderer.stage.draggable(false); document.body.classList.remove('grabbing-mode'); } if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; const key = e.key.toLowerCase(); if (key === 'v') state.setTool('pointer'); if (key === 'b') state.setTool('select-box'); if (key === 'l') state.setTool('select-lasso'); if (key === 'p') state.setTool('polarity'); if (key === 'h') state.setTool('pan'); if (key === 'w') state.setTool('wire'); if (key === 'k') state.toggleLockSelected(); });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Space') { renderer.stage.draggable(false); document.body.classList.remove('grabbing-mode'); } if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; const key = e.key.toLowerCase(); if (key === 'v') state.setTool('pointer'); if (key === 'b') state.setTool('select-box'); if (key === 'l') state.setTool('select-lasso'); if (key === 'p') state.setTool('polarity'); if (key === 'h') state.setTool('pan'); if (key === 'm') state.setTool('measure'); if (key === 'w') state.setTool('wire'); if (key === 'k') state.toggleLockSelected(); });
 
     eventBus.on('state:changed', ({ doc, ui, history, historyIndex }) => {
         safelySetText('btn-snap', ui.isSnapping ? "网格吸附: 开" : "网格吸附: 关"); safelyToggleClass('btn-snap', 'active', ui.isSnapping);
@@ -127,6 +113,7 @@ export function initToolbar(renderer) {
         safelyToggleClass('tool-polarity', 'active', ui.currentTool === 'polarity');
         safelyToggleClass('tool-pan', 'active', ui.currentTool === 'pan');
         safelyToggleClass('tool-wire', 'active', ui.currentTool === 'wire');
+        safelyToggleClass('tool-measure', 'active', ui.currentTool === 'measure'); // ✅ 卡尺高亮
 
         let pointerIcon = '👆';
         if (ui.currentTool === 'select-box') pointerIcon = '🔲'; else if (ui.currentTool === 'select-lasso') pointerIcon = '〽️'; else if (ui.currentTool === 'polarity') pointerIcon = '🔄'; else if (ui.currentTool === 'pan') pointerIcon = '✋';
@@ -153,11 +140,6 @@ export function initToolbar(renderer) {
                 }
             }
         }
-
-        document.querySelectorAll('.layer-item[data-layer]').forEach(item => {
-            const layerName = item.getAttribute('data-layer'); const isVisible = ui.layerVisibility[layerName];
-            item.classList.toggle('hidden-layer', !isVisible);
-            const toggle = item.querySelector('.layer-toggle'); if (toggle) toggle.innerText = isVisible ? '👁️' : '🙈';
-        });
+        document.querySelectorAll('.layer-item[data-layer]').forEach(item => { const layerName = item.getAttribute('data-layer'); const isVisible = ui.layerVisibility[layerName]; item.classList.toggle('hidden-layer', !isVisible); const toggle = item.querySelector('.layer-toggle'); if (toggle) toggle.innerText = isVisible ? '👁️' : '🙈'; });
     });
 }
