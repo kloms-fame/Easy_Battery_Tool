@@ -1,6 +1,9 @@
 import { eventBus } from './EventBus.js';
 import { state } from './State.js';
 
+// ✅ 核心修复 1：移动端防抖阈值。滑动必须超过 10px 才能算拖拽，彻底解决“点不中”的世纪难题！
+Konva.dragDistance = 10;
+
 export class Renderer {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -10,8 +13,6 @@ export class Renderer {
 
         this.selectionRect = new Konva.Rect({ fill: 'rgba(56, 189, 248, 0.2)', stroke: '#38bdf8', strokeWidth: 1, visible: false });
         this.lassoLine = new Konva.Line({ stroke: '#38bdf8', strokeWidth: 2, fill: 'rgba(56, 189, 248, 0.2)', closed: true, visible: false, tension: 0 });
-
-        // 测量卡尺工具图元
         this.measureLine = new Konva.Line({ stroke: '#10b981', strokeWidth: 2, dash: [4, 4], visible: false });
         this.measureText = new Konva.Text({ text: '', fontSize: 14, fill: '#10b981', backgroundColor: '#0f172a', padding: 4, cornerRadius: 4, visible: false, fontStyle: 'bold' });
 
@@ -30,9 +31,8 @@ export class Renderer {
         eventBus.on('network:ghost_end', ({ peer }) => this.clearRemoteGhost(peer));
     }
 
-    // 替换原本的 bindSystemEvents 方法
     bindSystemEvents() {
-        // 1. PC 端滚轮缩放
+        // ================= PC 端滚轮缩放 =================
         this.stage.on('wheel', (e) => {
             e.evt.preventDefault();
             const oldScale = this.stage.scaleX(); const pointer = this.stage.getPointerPosition();
@@ -42,47 +42,45 @@ export class Renderer {
             this.stage.position({ x: pointer.x - mousePointTo.x * newScale, y: pointer.y - mousePointTo.y * newScale });
         });
 
-        // ✅ 2. 移动端双指触控算法 (缩放 + 平移)
+        // ================= ✅ 修复 2：完美移动端双指触控引擎 =================
         let lastCenter = null;
         let lastDist = 0;
+
         this.stage.on('touchmove', (e) => {
-            e.evt.preventDefault(); // 阻止手机浏览器原生滚动
-            const touch1 = e.evt.touches[0];
-            const touch2 = e.evt.touches[1];
+            // 阻止原生滚动，极其关键
+            e.evt.preventDefault();
+            const touches = e.evt.touches;
 
-            // 只有检测到两根手指时，才激活缩放与平移
-            if (touch1 && touch2) {
-                if (this.stage.isDragging()) this.stage.stopDrag(); // 中断可能冲突的单指拖拽
+            // 只有当有两根手指按在屏幕上时才处理
+            if (touches && touches.length >= 2) {
+                // 强制中止因为第一根手指接触引发的单指拖拽错误
+                if (this.stage.isDragging()) this.stage.stopDrag();
 
-                const p1 = { x: touch1.clientX, y: touch1.clientY };
-                const p2 = { x: touch2.clientX, y: touch2.clientY };
+                const p1 = { x: touches[0].clientX, y: touches[0].clientY };
+                const p2 = { x: touches[1].clientX, y: touches[1].clientY };
 
-                // 计算两指之间的距离
                 const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-                // 计算两指的中心点
                 const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
-                if (!lastCenter) { lastCenter = center; return; }
+                if (!lastCenter) { lastCenter = center; lastDist = dist; return; }
                 if (!lastDist) { lastDist = dist; return; }
 
-                // ================= 双指平移逻辑 =================
+                // 计算平移
                 const dx = center.x - lastCenter.x;
                 const dy = center.y - lastCenter.y;
-                this.stage.position({ x: this.stage.x() + dx, y: this.stage.y() + dy });
 
-                // ================= 双指缩放逻辑 =================
+                // 计算缩放
                 const scaleBy = dist / lastDist;
                 const oldScale = this.stage.scaleX();
                 let newScale = oldScale * scaleBy;
 
-                // 限制缩放极值
+                // 限制缩放防溢出
                 if (newScale < 0.1) newScale = 0.1;
                 if (newScale > 10) newScale = 10;
 
-                // 以两指中心点为缩放锚点
                 const pointTo = {
-                    x: (center.x - this.stage.x()) / oldScale,
-                    y: (center.y - this.stage.y()) / oldScale,
+                    x: (center.x - this.stage.x() - dx) / oldScale,
+                    y: (center.y - this.stage.y() - dy) / oldScale,
                 };
 
                 this.stage.scale({ x: newScale, y: newScale });
@@ -97,15 +95,17 @@ export class Renderer {
             }
         });
 
-        this.stage.on('touchend', () => {
-            lastDist = 0;
-            lastCenter = null;
+        this.stage.on('touchend', (e) => {
+            if (!e.evt.touches || e.evt.touches.length < 2) {
+                lastDist = 0; lastCenter = null;
+            }
         });
 
-        // 3. 鼠标按下/单指触屏 操作逻辑
+        // ================= 工具交互逻辑 =================
         this.stage.on('mousedown touchstart', (e) => {
+            if (e.evt && e.evt.touches && e.evt.touches.length > 1) return; // 双指时不触发任何画笔/框选工具
+
             const tool = state.ui.currentTool;
-            // 右键/中键/抓手工具 -> 开启全局平移
             if (e.evt.button === 1 || e.evt.button === 2 || tool === 'pan' || (tool === 'pointer' && e.target === this.stage)) { this.stage.draggable(true); return; }
 
             this.selectionStartPos = this.stage.getRelativePointerPosition();
@@ -123,14 +123,14 @@ export class Renderer {
             if (!e.evt.ctrlKey && !e.evt.metaKey && !e.evt.shiftKey) state.clearSelection();
         });
 
-        // 4. 单击空白处清空选择
-        this.stage.on('click tap', (e) => { if (state.ui.currentTool === 'pointer' && e.target === this.stage) state.clearSelection(); });
+        // ✅ 核心修复 3：完美兼容触屏的 Tap 事件清空背景
+        this.stage.on('click tap', (e) => {
+            if (state.ui.currentTool === 'pointer' && e.target === this.stage) state.clearSelection();
+        });
 
-        // 5. 鼠标/单指滑动逻辑
         let lastCursorTime = 0;
-        this.stage.on('pointermove', () => {
-            // 如果是双指操作，中止内部工具逻辑
-            if (this.stage.getPointerPosition() && this.stage.getPointerPosition().touches && this.stage.getPointerPosition().touches.length > 1) return;
+        this.stage.on('pointermove', (e) => {
+            if (e.evt && e.evt.touches && e.evt.touches.length > 1) return;
 
             const pos = this.stage.getRelativePointerPosition();
             if (!pos) return;
@@ -155,9 +155,9 @@ export class Renderer {
             else if (state.ui.currentTool === 'select-lasso') { this.lassoPoints.push(pos.x, pos.y); this.lassoLine.points(this.lassoPoints); }
         });
 
-        // 6. 抬起逻辑
         this.stage.on('mouseup touchend', (e) => {
             this.stage.draggable(false);
+
             if (this.isMeasuring) { this.isMeasuring = false; this.measureLine.visible(false); this.measureText.visible(false); return; }
 
             if (!this.isSelecting) return;
@@ -187,63 +187,39 @@ export class Renderer {
         window.addEventListener('resize', () => { this.stage.width(this.container.clientWidth); this.stage.height(this.container.clientHeight); state.notify(); });
     }
 
-    getPeerColor(peerId) {
-        let hash = 0; for (let i = 0; i < peerId.length; i++) hash = peerId.charCodeAt(i) + ((hash << 5) - hash);
-        return `hsl(${Math.abs(hash % 360)}, 85%, 60%)`;
-    }
+    getPeerColor(peerId) { let hash = 0; for (let i = 0; i < peerId.length; i++) hash = peerId.charCodeAt(i) + ((hash << 5) - hash); return `hsl(${Math.abs(hash % 360)}, 85%, 60%)`; }
 
     renderRemoteCursor(peerId, pos) {
         if (!state.ui.layerVisibility || !state.ui.layerVisibility.ui) return;
-
         let renderX = state.ui.viewMode === 'back' ? this.stage.width() - pos.x : pos.x;
-
         if (!this.remoteCursors[peerId]) {
-            const group = new Konva.Group();
-            const color = this.getPeerColor(peerId);
+            const group = new Konva.Group(); const color = this.getPeerColor(peerId);
             const arrow = new Konva.Path({ data: 'M0,0 L12,12 L5,14 L0,22 Z', fill: color, shadowColor: '#000', shadowBlur: 4, shadowOffset: { x: 2, y: 2 }, shadowOpacity: 0.5 });
             const tag = new Konva.Text({ text: peerId, x: 14, y: 14, fill: '#0f172a', backgroundColor: color, padding: 3, fontSize: 10, cornerRadius: 4, fontStyle: 'bold' });
-            group.add(arrow, tag);
-            this.layers.ui.add(group);
-            this.remoteCursors[peerId] = group;
+            group.add(arrow, tag); this.layers.ui.add(group); this.remoteCursors[peerId] = group;
         }
-        this.remoteCursors[peerId].position({ x: renderX, y: pos.y });
-        this.layers.ui.batchDraw();
+        this.remoteCursors[peerId].position({ x: renderX, y: pos.y }); this.layers.ui.batchDraw();
     }
 
-    // ✅ 高级残影渲染系统：带有对方的署名标签，视觉防冲突
     renderRemoteGhost(peerId, cellsData) {
         let peerGroup = this.remoteGhostsGroup.findOne(`#ghost-${peerId}`);
-        if (!peerGroup) {
-            peerGroup = new Konva.Group({ id: `ghost-${peerId}` });
-            this.remoteGhostsGroup.add(peerGroup);
-        }
+        if (!peerGroup) { peerGroup = new Konva.Group({ id: `ghost-${peerId}` }); this.remoteGhostsGroup.add(peerGroup); }
         peerGroup.destroyChildren();
 
         const color = this.getPeerColor(peerId);
         cellsData.forEach((ghost, index) => {
             let renderX = state.ui.viewMode === 'back' ? this.stage.width() - ghost.cx : ghost.cx;
-            // 虚线电芯轮廓
             peerGroup.add(new Konva.Circle({ x: renderX, y: ghost.cy, radius: state.ui.cellRadius, stroke: color, strokeWidth: 2, dash: [4, 4], opacity: 0.8 }));
-
-            // 在这一坨残影的第一个元素上方打上对方名字标签
-            if (index === 0) {
-                peerGroup.add(new Konva.Text({ text: `${peerId} 拖拽中...`, x: renderX - 20, y: ghost.cy - 35, fill: color, fontSize: 11, fontStyle: 'bold' }));
-            }
+            if (index === 0) peerGroup.add(new Konva.Text({ text: `${peerId} 拖拽中...`, x: renderX - 20, y: ghost.cy - 35, fill: color, fontSize: 11, fontStyle: 'bold' }));
         });
         this.layers.ui.batchDraw();
     }
 
-    clearRemoteGhost(peerId) {
-        const peerGroup = this.remoteGhostsGroup.findOne(`#ghost-${peerId}`);
-        if (peerGroup) { peerGroup.destroy(); this.layers.ui.batchDraw(); }
-    }
-
+    clearRemoteGhost(peerId) { const peerGroup = this.remoteGhostsGroup.findOne(`#ghost-${peerId}`); if (peerGroup) { peerGroup.destroy(); this.layers.ui.batchDraw(); } }
     isPointInPolygon(x, y, points) { let inside = false; for (let i = 0, j = points.length - 2; i < points.length; j = i, i += 2) { let intersect = ((points[i + 1] > y) !== (points[j + 1] > y)) && (x < (points[j] - points[i]) * (y - points[i + 1]) / (points[j + 1] - points[i + 1]) + points[i]); if (intersect) inside = !inside; } return inside; }
 
     renderAll(doc, ui) {
-        this.layers.busbar.visible(ui.layerVisibility.busbar);
-        this.layers.cell.visible(ui.layerVisibility.cell);
-        this.layers.ui.visible(ui.layerVisibility.ui);
+        this.layers.busbar.visible(ui.layerVisibility.busbar); this.layers.cell.visible(ui.layerVisibility.cell); this.layers.ui.visible(ui.layerVisibility.ui);
         this.renderBusbars(doc, ui); this.renderCells(doc, ui);
         const cellEl = document.getElementById('cell-count'); const wireEl = document.getElementById('wire-count');
         if (cellEl) cellEl.innerText = doc.cells.length; if (wireEl) wireEl.innerText = doc.busbars.length;
@@ -271,7 +247,7 @@ export class Renderer {
             const cellGroup = new Konva.Group({ x: renderX, y: cell.cy, id: cell.id, draggable: ui.currentTool === 'pointer' && !cell.isLocked });
 
             cellGroup.on('dragstart', (e) => {
-                if (!ui.selectedCells.includes(cell.id)) { if (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey) state.selectCells([...ui.selectedCells, cell.id]); else state.selectCells([cell.id]); }
+                if (!ui.selectedCells.includes(cell.id)) { if (e.evt && (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey)) state.selectCells([...ui.selectedCells, cell.id]); else state.selectCells([cell.id]); }
                 this.dragStartPositions = {};
                 this.dragTrailGroup.destroyChildren();
 
@@ -290,7 +266,6 @@ export class Renderer {
                 let dy = e.target.y() - this.dragStartPositions[cell.id].cy;
 
                 let ghostPayload = [];
-
                 doc.cells.forEach(c => {
                     if (ui.selectedCells.includes(c.id) && !c.isLocked) {
                         c.cx = this.dragStartPositions[c.id].cx + dx; c.cy = this.dragStartPositions[c.id].cy + dy;
@@ -307,23 +282,20 @@ export class Renderer {
                 });
                 this.renderBusbars(doc, ui);
 
-                // ✅ 彻底修复拖动时坐标错位问题：使用纯内建 API 获取当前内部指针绝对位置进行广播！
                 const pointerPos = this.stage.getRelativePointerPosition();
                 if (pointerPos) {
                     let absoluteX = state.ui.viewMode === 'back' ? this.stage.width() - pointerPos.x : pointerPos.x;
                     state.broadcastCursor({ x: absoluteX, y: pointerPos.y });
                 }
-
                 state.broadcastGhostMove(ghostPayload);
             });
 
-            cellGroup.on('dragend', () => {
-                this.dragTrailGroup.destroyChildren();
-                state.broadcastGhostEnd();
-                state.commitAction(ui.selectedCells.length > 1 ? '批量移动' : '移动电芯');
-            });
+            cellGroup.on('dragend', () => { this.dragTrailGroup.destroyChildren(); state.broadcastGhostEnd(); state.commitAction(ui.selectedCells.length > 1 ? '批量移动' : '移动电芯'); });
 
-            cellGroup.on('click', (e) => { if (e.evt.detail === 1 && ui.currentTool !== 'pan') state.handleCellClick(cell.id, e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey); });
+            // ✅ 终极修复：使用 click tap 兼容手机。由于有 dragDistance 的护盾，这里绝对百发百中！
+            cellGroup.on('click tap', (e) => {
+                if (ui.currentTool !== 'pan') state.handleCellClick(cell.id, e.evt && (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey));
+            });
 
             if (isSelected) cellGroup.add(new Konva.Circle({ radius: ui.cellRadius + 6, fill: 'rgba(56, 189, 248, 0.3)', stroke: '#38bdf8', strokeWidth: 2 }));
             const strokeColor = cell.isLocked ? '#475569' : (ui.currentTool === 'wire' && ui.wireStartCell === cell.id ? '#fbbf24' : (displayPolarity === 'positive' ? '#ef4444' : '#3b82f6'));
