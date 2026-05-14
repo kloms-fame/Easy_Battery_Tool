@@ -151,9 +151,57 @@ class State {
     }
 
     toggleLockSelected() { if (this.ui.selectedCells.length === 0) return; const allLocked = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id)).every(c => c.isLocked); this.doc.cells.forEach(c => { if (this.ui.selectedCells.includes(c.id)) c.isLocked = !allLocked; }); this.commitAction(allLocked ? '解锁' : '锁定'); }
-    deleteSelected() { if (this.ui.selectedCells.length === 0) return; const cellsToDelete = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id) && !c.isLocked).map(c => c.id); if (cellsToDelete.length === 0) return; this.doc.cells = this.doc.cells.filter(c => !cellsToDelete.includes(c.id)); this.doc.busbars = this.doc.busbars.filter(b => !cellsToDelete.includes(b.from) && !cellsToDelete.includes(b.to)); this.ui.selectedCells = this.ui.selectedCells.filter(id => !cellsToDelete.includes(id)); this.commitAction('删除'); }
+    deleteSelected() {
+        if (this.ui.selectedCells.length === 0) return;
+        const cellsToDelete = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id) && !c.isLocked).map(c => c.id);
+        if (cellsToDelete.length === 0) return;
+
+        this.doc.cells = this.doc.cells.filter(c => !cellsToDelete.includes(c.id));
+        this.doc.busbars = this.doc.busbars.filter(b => !cellsToDelete.includes(b.from) && !cellsToDelete.includes(b.to));
+
+        // 同步删除 BMS 飞线
+        if (this.doc.bmsWires) {
+            this.doc.bmsWires = this.doc.bmsWires.filter(bw => !cellsToDelete.includes(bw.cellId));
+        }
+
+        this.ui.selectedCells = this.ui.selectedCells.filter(id => !cellsToDelete.includes(id));
+        this.commitAction('删除');
+    }
     copySelected() { this.clipboard.cells = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id)).map(c => ({ ...c })); this.clipboard.busbars = this.doc.busbars.filter(b => this.ui.selectedCells.includes(b.from) && this.ui.selectedCells.includes(b.to)).map(b => ({ ...b })); }
-    pasteSelected() { if (this.clipboard.cells.length === 0) return; let idMapping = {}; let newSelectedIds = []; const offset = this.ui.gridSize; this.clipboard.cells.forEach(c => { let newId = `C${this.idCounters.cell++}`; idMapping[c.id] = newId; newSelectedIds.push(newId); this.doc.cells.push({ id: newId, cx: c.cx + offset, cy: c.cy + offset, polarity: c.polarity, isLocked: false, voltage: c.voltage, resistance: c.resistance }); c.cx += offset; c.cy += offset; }); this.clipboard.busbars.forEach(b => { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: idMapping[b.from], to: idMapping[b.to] }); }); this.ui.selectedCells = newSelectedIds; this.commitAction('粘贴'); }
+    pasteSelected() {
+        if (this.clipboard.cells.length === 0) return;
+        let idMapping = {};
+        let newSelectedIds = [];
+        const offset = this.ui.gridSize;
+
+        this.clipboard.cells.forEach(c => {
+            let newId = `C${this.idCounters.cell++}`;
+            idMapping[c.id] = newId;
+            newSelectedIds.push(newId);
+            this.doc.cells.push({
+                id: newId,
+                cx: c.cx + offset,
+                cy: c.cy + offset,
+                polarity: c.polarity,
+                isLocked: false,
+                voltage: c.voltage,
+                resistance: c.resistance
+            });
+        });
+
+        this.clipboard.busbars.forEach(b => {
+            // 保留正反面 side 属性
+            this.doc.busbars.push({
+                id: `B${this.idCounters.busbar++}`,
+                from: idMapping[b.from],
+                to: idMapping[b.to],
+                side: b.side
+            });
+        });
+
+        this.ui.selectedCells = newSelectedIds;
+        this.commitAction('粘贴');
+    }
     updateSelectedProperties(voltage, resistance) { if (this.ui.selectedCells.length === 0) return; this.doc.cells.forEach(c => { if (this.ui.selectedCells.includes(c.id)) { if (voltage !== null) c.voltage = voltage; if (resistance !== null) c.resistance = resistance; } }); this.commitAction('修改属性'); }
     addCell(x, y) { this.doc.cells.push({ id: `C${this.idCounters.cell++}`, cx: x, cy: y, polarity: 'positive', isLocked: false, voltage: '', resistance: '' }); this.commitAction('添加电芯'); }
     clearAll() {

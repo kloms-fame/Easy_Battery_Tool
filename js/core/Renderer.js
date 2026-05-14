@@ -381,19 +381,30 @@ export class Renderer {
             return;
         }
 
-        const allX = doc.cells.map(c => c.cx);
-        const minX = Math.min(...allX) - 50;
-        const maxX = Math.max(...allX) + 50;
-        const bmsX = this.stage.width() / 2;
-        const bmsY = this.stage.height() - 30;
+        // 物理坐标系映射：根据电芯位置动态计算
+        const renderXs = doc.cells.map(c => ui.viewMode === 'back' ? this.stage.width() - c.cx : c.cx);
+        const renderYs = doc.cells.map(c => c.cy);
+        const minX = Math.min(...renderXs) - 60;
+        const maxX = Math.max(...renderXs) + 60;
+        const maxY = Math.max(...renderYs) + 80;
+
+        // BMS 固定在电池组下方，不会粘在屏幕底部
+        const bmsX = (minX + maxX) / 2;
+        const bmsY = maxY + 60;
+
+        // 绘制 BMS 实体板
+        const boardWidth = Math.min(maxX - minX + 40, 400);
+        const bmsBoard = new Konva.Group({ x: bmsX - boardWidth / 2, y: bmsY - 20 });
+        bmsBoard.add(new Konva.Rect({ width: boardWidth, height: 40, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2, cornerRadius: 6, shadowColor: '#10b981', shadowBlur: 10, shadowOpacity: 0.3 }));
+        bmsBoard.add(new Konva.Text({ text: '⚡ BMS 智能保护板', width: boardWidth, align: 'center', y: 12, fill: '#10b981', fontStyle: 'bold', fontSize: 14 }));
+        this.layers.bms.add(bmsBoard);
 
         doc.bmsWires.forEach((bw, index) => {
             const cell = doc.cells.find(c => c.id === bw.cellId);
             if (!cell) return;
 
             let renderX = ui.viewMode === 'back' ? this.stage.width() - cell.cx : cell.cx;
-            let sideX = cell.cx < bmsX ? minX : maxX;
-            let renderSideX = ui.viewMode === 'back' ? this.stage.width() - sideX : sideX;
+            let sideX = renderX < bmsX ? minX : maxX;
 
             const colors = ['#ffffff', '#ef4444', '#3b82f6', '#eab308', '#22c55e', '#a855f7', '#f97316'];
             const color = colors[index % colors.length];
@@ -401,15 +412,14 @@ export class Renderer {
 
             const points = [
                 renderX, cell.cy,
-                renderSideX, cell.cy,
-                renderSideX, bmsY - 60,
-                bmsX, bmsY - 40,
-                bmsX, bmsY
+                sideX, cell.cy,
+                sideX, bmsY - 50,
+                bmsX, bmsY - 30,
+                bmsX, bmsY - 20
             ];
 
             const line = new Konva.Line({
-                points: points, tension: 0.4,
-                stroke: color, strokeWidth: 2.5, dash: [6, 3],
+                points: points, tension: 0.4, stroke: color, strokeWidth: 2.5, dash: [6, 3],
                 shadowColor: color, shadowBlur: 5, opacity: 0.9
             });
             this.layers.bms.add(line);
@@ -419,6 +429,7 @@ export class Renderer {
             tagGroup.add(new Konva.Text({ text: label, fontSize: 11, fill: color === '#ffffff' ? '#000' : '#fff', fontStyle: 'bold', x: 4, y: 3 }));
             this.layers.bms.add(tagGroup);
         });
+
         this.layers.bms.draw();
     }
 }

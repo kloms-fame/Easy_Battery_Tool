@@ -265,7 +265,14 @@ export function initToolbar(renderer) {
     const closeWarnBtn = document.getElementById('btn-close-warning');
     if (closeWarnBtn) closeWarnBtn.onclick = () => document.getElementById('short-circuit-modal').style.display = 'none';
 
-    window.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; if (e.code === 'Space') { e.preventDefault(); renderer.stage.draggable(true); document.body.classList.add('grabbing-mode'); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); state.undo(); } if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); state.redo(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelected(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteSelected(); } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); state.deleteSelected(); } });
+    window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; // 🌟 新增：Ctrl + A 全选所有电芯
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+            e.preventDefault();
+            state.selectCells(state.doc.cells.map(c => c.id));
+            return;
+        } if (e.code === 'Space') { e.preventDefault(); renderer.stage.draggable(true); document.body.classList.add('grabbing-mode'); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); state.undo(); } if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); state.redo(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelected(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteSelected(); } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); state.deleteSelected(); }
+    });
     window.addEventListener('keyup', (e) => { if (e.code === 'Space') { renderer.stage.draggable(false); document.body.classList.remove('grabbing-mode'); } if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; const key = e.key.toLowerCase(); if (key === 'v') state.setTool('pointer'); if (key === 'b') state.setTool('select-box'); if (key === 'l') state.setTool('select-lasso'); if (key === 'p') state.setTool('polarity'); if (key === 'h') state.setTool('pan'); if (key === 'm') state.setTool('measure'); if (key === 'w') state.setTool('wire'); if (key === 'k') state.toggleLockSelected(); if (key === 'f') state.setTool('bms-wire'); });
 
     eventBus.on('state:changed', ({ doc, ui, history, historyIndex }) => {
