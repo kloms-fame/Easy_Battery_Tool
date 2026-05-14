@@ -2,8 +2,8 @@ import { eventBus } from './EventBus.js';
 import { TopologyEngine } from './TopologyEngine.js'; // 🌟 新增导入
 class State {
     constructor() {
-        this.doc = { cells: [], busbars: [] };
-        this.ui = { viewMode: 'front', currentTool: 'pointer', isSnapping: false, gridSize: 40, cellRadius: 18, wireStartCell: null, selectedCells: [], layerVisibility: { cell: true, busbar: true, labels: true, ui: true } };
+        this.doc = { cells: [], busbars: [], bmsWires: [] };
+        this.ui = { viewMode: 'front', currentTool: 'pointer', isSnapping: false, gridSize: 40, cellRadius: 18, wireStartCell: null, selectedCells: [], layerVisibility: { cell: true, busbar: true, bms: true, labels: true, ui: true } };
         this.idCounters = { cell: 1, busbar: 1 };
         this.history = []; this.historyIndex = -1; this.clipboard = { cells: [], busbars: [] };
 
@@ -11,6 +11,7 @@ class State {
         this.myPeerId = null;
         this.connections = [];
         this.connectedPeers = [];
+
     }
 
     initEmptyState() { this.commitAction('初始空画布'); }
@@ -155,7 +156,15 @@ class State {
     pasteSelected() { if (this.clipboard.cells.length === 0) return; let idMapping = {}; let newSelectedIds = []; const offset = this.ui.gridSize; this.clipboard.cells.forEach(c => { let newId = `C${this.idCounters.cell++}`; idMapping[c.id] = newId; newSelectedIds.push(newId); this.doc.cells.push({ id: newId, cx: c.cx + offset, cy: c.cy + offset, polarity: c.polarity, isLocked: false, voltage: c.voltage, resistance: c.resistance }); c.cx += offset; c.cy += offset; }); this.clipboard.busbars.forEach(b => { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: idMapping[b.from], to: idMapping[b.to] }); }); this.ui.selectedCells = newSelectedIds; this.commitAction('粘贴'); }
     updateSelectedProperties(voltage, resistance) { if (this.ui.selectedCells.length === 0) return; this.doc.cells.forEach(c => { if (this.ui.selectedCells.includes(c.id)) { if (voltage !== null) c.voltage = voltage; if (resistance !== null) c.resistance = resistance; } }); this.commitAction('修改属性'); }
     addCell(x, y) { this.doc.cells.push({ id: `C${this.idCounters.cell++}`, cx: x, cy: y, polarity: 'positive', isLocked: false, voltage: '', resistance: '' }); this.commitAction('添加电芯'); }
-    clearAll() { this.doc.cells = []; this.doc.busbars = []; this.idCounters = { cell: 1, busbar: 1 }; this.ui.wireStartCell = null; this.commitAction('清空画布'); }
+    clearAll() {
+        this.doc.cells = [];
+        this.doc.busbars = [];
+        this.doc.bmsWires = [];
+        this.idCounters = { cell: 1, busbar: 1 };
+        this.ui.wireStartCell = null;
+        this.ui.selectedCells = [];
+        this.commitAction('清空画布');
+    }
     removeBusbar(index) { if (this.ui.currentTool === 'pointer') { this.doc.busbars.splice(index, 1); this.commitAction('删除连线'); } }
     generateLayout(type, s, p, centerX, centerY) { let newIds = []; const hexStep = this.ui.gridSize * (Math.sqrt(3) / 2); const rowHeight = type === 'matrix' ? this.ui.gridSize : hexStep; const colWidth = type === 'fishscale' ? hexStep : this.ui.gridSize; const startX = centerX - (p * colWidth) / 2; const startY = centerY - (s * rowHeight) / 2; for (let r = 0; r < s; r++) { const polarity = (r % 2 === 0) ? 'positive' : 'negative'; for (let c = 0; c < p; c++) { let offsetX = 0; let offsetY = 0; if (type === 'honeycomb') offsetX = (r % 2 === 1) ? (this.ui.gridSize / 2) : 0; if (type === 'fishscale') offsetY = (c % 2 === 1) ? (this.ui.gridSize / 2) : 0; const id = `C${this.idCounters.cell++}`; this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false, voltage: '', resistance: '' }); newIds.push(id); } } this.ui.selectedCells = newIds; this.ui.currentTool = 'pointer'; this.commitAction(`生成 ${s}S${p}P`); }
     // 🌟 新增：极速滑动连焊逻辑
@@ -182,7 +191,38 @@ class State {
         }
         return false;
     }
-    handleCellClick(id, isMultiSelect = false) { const cell = this.doc.cells.find(c => c.id === id); if (!cell) return; if (this.ui.currentTool === 'pointer') { if (isMultiSelect) { if (this.ui.selectedCells.includes(id)) this.ui.selectedCells = this.ui.selectedCells.filter(c => c !== id); else this.ui.selectedCells.push(id); } else { this.ui.selectedCells = [id]; } this.notify(); } else if (this.ui.currentTool === 'polarity' && !cell.isLocked) { cell.polarity = cell.polarity === 'positive' ? 'negative' : 'positive'; this.commitAction('翻转极性'); } else if (this.ui.currentTool === 'wire') { if (!this.ui.wireStartCell) { this.ui.wireStartCell = id; this.notify(); } else { if (this.ui.wireStartCell !== id) { const exists = this.doc.busbars.some(b => (b.from === this.ui.wireStartCell && b.to === id) || (b.from === id && b.to === this.ui.wireStartCell)); if (!exists) { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: this.ui.wireStartCell, to: id, side: this.ui.viewMode }); this.ui.wireStartCell = null; this.commitAction('添加连线'); return; } } this.ui.wireStartCell = null; this.notify(); } } }
+    handleCellClick(id, isMultiSelect = false) {
+        const cell = this.doc.cells.find(c => c.id === id); if (!cell) return; if (this.ui.currentTool === 'pointer') { if (isMultiSelect) { if (this.ui.selectedCells.includes(id)) this.ui.selectedCells = this.ui.selectedCells.filter(c => c !== id); else this.ui.selectedCells.push(id); } else { this.ui.selectedCells = [id]; } this.notify(); } else if (this.ui.currentTool === 'polarity' && !cell.isLocked) { cell.polarity = cell.polarity === 'positive' ? 'negative' : 'positive'; this.commitAction('翻转极性'); } else if (this.ui.currentTool === 'wire') {
+            if (!this.ui.wireStartCell) {
+                this.ui.wireStartCell = id;
+                this.notify();
+            } else {
+                if (this.ui.wireStartCell !== id) {
+                    const exists = this.doc.busbars.some(b => (b.from === this.ui.wireStartCell && b.to === id) || (b.from === id && b.to === this.ui.wireStartCell));
+                    if (!exists) {
+                        this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: this.ui.wireStartCell, to: id, side: this.ui.viewMode });
+                        this.ui.wireStartCell = null;
+                        this.commitAction('添加连线');
+                        return;
+                    }
+                }
+                this.ui.wireStartCell = null;
+                this.notify();
+            }
+        } else if (this.ui.currentTool === 'bms-wire') {
+            if (!this.doc.bmsWires) this.doc.bmsWires = [];
+
+            let existingIndex = this.doc.bmsWires.findIndex(w => w.cellId === id);
+            if (existingIndex !== -1) {
+                this.doc.bmsWires.splice(existingIndex);
+                this.commitAction('拔除 BMS 飞线');
+            } else {
+                this.doc.bmsWires.push({ cellId: id });
+                this.commitAction('焊接 BMS 飞线');
+            }
+            this.notify();
+        }
+    }
     toggleLayerVisibility(layerName) { this.ui.layerVisibility[layerName] = !this.ui.layerVisibility[layerName]; this.notify(); }
     selectCells(cellIds) { this.ui.selectedCells = cellIds; this.notify(); }
     clearSelection() { this.ui.selectedCells = []; this.notify(); }

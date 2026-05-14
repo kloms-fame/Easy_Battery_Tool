@@ -156,6 +156,7 @@ export function initToolbar(renderer) {
     document.getElementById('tool-polarity').onclick = () => state.setTool('polarity');
     document.getElementById('tool-pan').onclick = () => state.setTool('pan');
     document.getElementById('tool-wire').onclick = () => state.setTool('wire');
+    document.getElementById('tool-bms').onclick = () => state.setTool('bms-wire');
     document.getElementById('tool-measure').onclick = () => state.setTool('measure'); // ✅ 绑定卡尺
     document.getElementById('btn-undo').onclick = () => state.undo(); document.getElementById('btn-redo').onclick = () => state.redo();
 
@@ -217,8 +218,8 @@ export function initToolbar(renderer) {
 
     // 在 eventBus.on('state:changed', ...) 内部的最后，增加状态栏更新与弹窗触发逻辑
     eventBus.on('state:changed', ({ doc, ui, history, historyIndex, analysis }) => {
-        // ... 原有的 UI 更新代码 ...
 
+        // 🌟 核心状态与报警拦截网
         if (analysis) {
             let statsText = '';
             let statsColor = '#fbbf24';
@@ -226,11 +227,14 @@ export function initToolbar(renderer) {
             if (analysis.isShorted) {
                 statsText = "⛔ 严重短路！";
                 statsColor = '#ef4444';
+            } else if (analysis.bmsError) {
+                statsText = `💥 BMS ${analysis.bmsError}`;
+                statsColor = '#ef4444';
             } else if (analysis.orphanCount > 0 && doc.cells.length > 0) {
-                statsText = `⚠️ 检测到 ${analysis.orphanCount} 个漏焊电芯!`;
+                statsText = `⚠️ 漏焊: ${analysis.orphanCount} 个电芯`;
                 statsColor = '#f97316';
             } else if (analysis.connectedCount > 0) {
-                statsText = `✅ ${analysis.s}S${analysis.p}P (${analysis.v}V)`;
+                statsText = `✅ ${analysis.s}S${analysis.p}P (${analysis.v}V) | 采样线: ${doc.bmsWires ? doc.bmsWires.length : 0} 根`;
                 statsColor = '#10b981';
             } else {
                 statsText = "未建立电路";
@@ -245,6 +249,16 @@ export function initToolbar(renderer) {
             const modal = document.getElementById('short-circuit-modal');
             if (modal) modal.style.display = analysis.isShorted ? 'flex' : 'none';
         }
+
+        // 工具高亮
+        safelyToggleClass('tool-pointer', 'active', ui.currentTool === 'pointer');
+        safelyToggleClass('tool-select-box', 'active', ui.currentTool === 'select-box');
+        safelyToggleClass('tool-select-lasso', 'active', ui.currentTool === 'select-lasso');
+        safelyToggleClass('tool-polarity', 'active', ui.currentTool === 'polarity');
+        safelyToggleClass('tool-pan', 'active', ui.currentTool === 'pan');
+        safelyToggleClass('tool-wire', 'active', ui.currentTool === 'wire');
+        safelyToggleClass('tool-bms', 'active', ui.currentTool === 'bms-wire');
+        safelyToggleClass('tool-measure', 'active', ui.currentTool === 'measure');
     });
 
     // 绑定防爆弹窗的关闭按钮
@@ -252,7 +266,7 @@ export function initToolbar(renderer) {
     if (closeWarnBtn) closeWarnBtn.onclick = () => document.getElementById('short-circuit-modal').style.display = 'none';
 
     window.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; if (e.code === 'Space') { e.preventDefault(); renderer.stage.draggable(true); document.body.classList.add('grabbing-mode'); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); state.undo(); } if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); state.redo(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelected(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteSelected(); } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); state.deleteSelected(); } });
-    window.addEventListener('keyup', (e) => { if (e.code === 'Space') { renderer.stage.draggable(false); document.body.classList.remove('grabbing-mode'); } if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; const key = e.key.toLowerCase(); if (key === 'v') state.setTool('pointer'); if (key === 'b') state.setTool('select-box'); if (key === 'l') state.setTool('select-lasso'); if (key === 'p') state.setTool('polarity'); if (key === 'h') state.setTool('pan'); if (key === 'm') state.setTool('measure'); if (key === 'w') state.setTool('wire'); if (key === 'k') state.toggleLockSelected(); });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Space') { renderer.stage.draggable(false); document.body.classList.remove('grabbing-mode'); } if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; const key = e.key.toLowerCase(); if (key === 'v') state.setTool('pointer'); if (key === 'b') state.setTool('select-box'); if (key === 'l') state.setTool('select-lasso'); if (key === 'p') state.setTool('polarity'); if (key === 'h') state.setTool('pan'); if (key === 'm') state.setTool('measure'); if (key === 'w') state.setTool('wire'); if (key === 'k') state.toggleLockSelected(); if (key === 'f') state.setTool('bms-wire'); });
 
     eventBus.on('state:changed', ({ doc, ui, history, historyIndex }) => {
         safelySetText('btn-snap', ui.isSnapping ? "网格吸附: 开" : "网格吸附: 关"); safelyToggleClass('btn-snap', 'active', ui.isSnapping);
@@ -265,6 +279,7 @@ export function initToolbar(renderer) {
         safelyToggleClass('tool-polarity', 'active', ui.currentTool === 'polarity');
         safelyToggleClass('tool-pan', 'active', ui.currentTool === 'pan');
         safelyToggleClass('tool-wire', 'active', ui.currentTool === 'wire');
+        safelyToggleClass('tool-bms', 'active', ui.currentTool === 'bms-wire');
         safelyToggleClass('tool-measure', 'active', ui.currentTool === 'measure'); // ✅ 卡尺高亮
 
         let pointerIcon = '👆';
@@ -279,16 +294,20 @@ export function initToolbar(renderer) {
         if (propPanel) {
             if (ui.selectedCells.length === 0) { propPanel.style.display = 'none'; }
             else {
-                propPanel.style.display = 'block';
                 if (ui.selectedCells.length === 1) {
-                    const cell = doc.cells.find(c => c.id === ui.selectedCells[0]);
-                    if (propInfo) propInfo.innerText = `当前选中: ${cell.id}`;
-                    if (inputV && document.activeElement !== inputV) inputV.value = cell.voltage || '';
-                    if (inputR && document.activeElement !== inputR) inputR.value = cell.resistance || '';
-                } else {
-                    if (propInfo) propInfo.innerText = `已选中 ${ui.selectedCells.length} 个图元`;
-                    if (inputV && document.activeElement !== inputV) inputV.value = '';
-                    if (inputR && document.activeElement !== inputR) inputR.value = '';
+                    const targetId = ui.selectedCells[0];
+                    const cell = doc.cells.find(c => c && c.id === targetId);
+
+                    if (cell) {
+                        propPanel.style.display = 'block';
+                        if (propInfo) propInfo.innerText = `当前选中: ${cell.id}`;
+                        if (inputV && document.activeElement !== inputV) inputV.value = cell.voltage || '';
+                        if (inputR && document.activeElement !== inputR) inputR.value = cell.resistance || '';
+                    } else {
+                        // 电芯已被删除，清空选中、隐藏面板
+                        state.clearSelection();
+                        propPanel.style.display = 'none';
+                    }
                 }
             }
         }

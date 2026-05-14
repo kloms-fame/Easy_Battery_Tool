@@ -8,8 +8,8 @@ export class Renderer {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.stage = new Konva.Stage({ container: containerId, width: this.container.clientWidth, height: this.container.clientHeight });
-        this.layers = { busbar: new Konva.Layer(), cell: new Konva.Layer(), ui: new Konva.Layer() };
-        this.stage.add(this.layers.busbar, this.layers.cell, this.layers.ui);
+        this.layers = { busbar: new Konva.Layer(), bms: new Konva.Layer(), cell: new Konva.Layer(), ui: new Konva.Layer() };
+        this.stage.add(this.layers.busbar, this.layers.bms, this.layers.cell, this.layers.ui);
 
         this.selectionRect = new Konva.Rect({ fill: 'rgba(56, 189, 248, 0.2)', stroke: '#38bdf8', strokeWidth: 1, visible: false });
         this.lassoLine = new Konva.Line({ stroke: '#38bdf8', strokeWidth: 2, fill: 'rgba(56, 189, 248, 0.2)', closed: true, visible: false, tension: 0 });
@@ -262,8 +262,12 @@ export class Renderer {
     isPointInPolygon(x, y, points) { let inside = false; for (let i = 0, j = points.length - 2; i < points.length; j = i, i += 2) { let intersect = ((points[i + 1] > y) !== (points[j + 1] > y)) && (x < (points[j] - points[i]) * (y - points[i + 1]) / (points[j + 1] - points[i + 1]) + points[i]); if (intersect) inside = !inside; } return inside; }
 
     renderAll(doc, ui) {
-        this.layers.busbar.visible(ui.layerVisibility.busbar); this.layers.cell.visible(ui.layerVisibility.cell); this.layers.ui.visible(ui.layerVisibility.ui);
-        this.renderBusbars(doc, ui); this.renderCells(doc, ui);
+        this.layers.busbar.visible(ui.layerVisibility.busbar); this.layers.bms.visible(ui.layerVisibility.bms); this.layers.cell.visible(ui.layerVisibility.cell); this.layers.ui.visible(ui.layerVisibility.ui);
+        this.renderBusbars(doc, ui);
+        this.renderCells(doc, ui);
+        this.renderBms(doc, ui);
+
+
         const cellEl = document.getElementById('cell-count'); const wireEl = document.getElementById('wire-count');
         if (cellEl) cellEl.innerText = doc.cells.length; if (wireEl) wireEl.innerText = doc.busbars.length;
     }
@@ -369,5 +373,52 @@ export class Renderer {
 
         if (ui.currentTool === 'pan') this.container.style.cursor = 'grab'; else if (ui.currentTool === 'measure') this.container.style.cursor = 'crosshair'; else if (ui.currentTool === 'wire' || ui.currentTool.includes('select')) this.container.style.cursor = 'crosshair'; else this.container.style.cursor = 'default';
         this.layers.cell.draw();
+    }
+    renderBms(doc, ui) {
+        this.layers.bms.destroyChildren();
+        if (!doc.bmsWires || doc.bmsWires.length === 0) {
+            this.layers.bms.draw();
+            return;
+        }
+
+        const allX = doc.cells.map(c => c.cx);
+        const minX = Math.min(...allX) - 50;
+        const maxX = Math.max(...allX) + 50;
+        const bmsX = this.stage.width() / 2;
+        const bmsY = this.stage.height() - 30;
+
+        doc.bmsWires.forEach((bw, index) => {
+            const cell = doc.cells.find(c => c.id === bw.cellId);
+            if (!cell) return;
+
+            let renderX = ui.viewMode === 'back' ? this.stage.width() - cell.cx : cell.cx;
+            let sideX = cell.cx < bmsX ? minX : maxX;
+            let renderSideX = ui.viewMode === 'back' ? this.stage.width() - sideX : sideX;
+
+            const colors = ['#ffffff', '#ef4444', '#3b82f6', '#eab308', '#22c55e', '#a855f7', '#f97316'];
+            const color = colors[index % colors.length];
+            const label = index === 0 ? 'B-' : `B${index}`;
+
+            const points = [
+                renderX, cell.cy,
+                renderSideX, cell.cy,
+                renderSideX, bmsY - 60,
+                bmsX, bmsY - 40,
+                bmsX, bmsY
+            ];
+
+            const line = new Konva.Line({
+                points: points, tension: 0.4,
+                stroke: color, strokeWidth: 2.5, dash: [6, 3],
+                shadowColor: color, shadowBlur: 5, opacity: 0.9
+            });
+            this.layers.bms.add(line);
+
+            const tagGroup = new Konva.Group({ x: renderX + 15, y: cell.cy - 15 });
+            tagGroup.add(new Konva.Rect({ fill: color, cornerRadius: 4, width: 30, height: 18 }));
+            tagGroup.add(new Konva.Text({ text: label, fontSize: 11, fill: color === '#ffffff' ? '#000' : '#fff', fontStyle: 'bold', x: 4, y: 3 }));
+            this.layers.bms.add(tagGroup);
+        });
+        this.layers.bms.draw();
     }
 }
