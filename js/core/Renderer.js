@@ -30,7 +30,9 @@ export class Renderer {
         eventBus.on('network:ghost_end', ({ peer }) => this.clearRemoteGhost(peer));
     }
 
+    // 替换原本的 bindSystemEvents 方法
     bindSystemEvents() {
+        // 1. PC 端滚轮缩放
         this.stage.on('wheel', (e) => {
             e.evt.preventDefault();
             const oldScale = this.stage.scaleX(); const pointer = this.stage.getPointerPosition();
@@ -40,19 +42,78 @@ export class Renderer {
             this.stage.position({ x: pointer.x - mousePointTo.x * newScale, y: pointer.y - mousePointTo.y * newScale });
         });
 
-        this.stage.on('mousedown', (e) => {
+        // ✅ 2. 移动端双指触控算法 (缩放 + 平移)
+        let lastCenter = null;
+        let lastDist = 0;
+        this.stage.on('touchmove', (e) => {
+            e.evt.preventDefault(); // 阻止手机浏览器原生滚动
+            const touch1 = e.evt.touches[0];
+            const touch2 = e.evt.touches[1];
+
+            // 只有检测到两根手指时，才激活缩放与平移
+            if (touch1 && touch2) {
+                if (this.stage.isDragging()) this.stage.stopDrag(); // 中断可能冲突的单指拖拽
+
+                const p1 = { x: touch1.clientX, y: touch1.clientY };
+                const p2 = { x: touch2.clientX, y: touch2.clientY };
+
+                // 计算两指之间的距离
+                const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                // 计算两指的中心点
+                const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+                if (!lastCenter) { lastCenter = center; return; }
+                if (!lastDist) { lastDist = dist; return; }
+
+                // ================= 双指平移逻辑 =================
+                const dx = center.x - lastCenter.x;
+                const dy = center.y - lastCenter.y;
+                this.stage.position({ x: this.stage.x() + dx, y: this.stage.y() + dy });
+
+                // ================= 双指缩放逻辑 =================
+                const scaleBy = dist / lastDist;
+                const oldScale = this.stage.scaleX();
+                let newScale = oldScale * scaleBy;
+
+                // 限制缩放极值
+                if (newScale < 0.1) newScale = 0.1;
+                if (newScale > 10) newScale = 10;
+
+                // 以两指中心点为缩放锚点
+                const pointTo = {
+                    x: (center.x - this.stage.x()) / oldScale,
+                    y: (center.y - this.stage.y()) / oldScale,
+                };
+
+                this.stage.scale({ x: newScale, y: newScale });
+                this.stage.position({
+                    x: center.x - pointTo.x * newScale,
+                    y: center.y - pointTo.y * newScale,
+                });
+
+                lastDist = dist;
+                lastCenter = center;
+                this.layers.ui.batchDraw();
+            }
+        });
+
+        this.stage.on('touchend', () => {
+            lastDist = 0;
+            lastCenter = null;
+        });
+
+        // 3. 鼠标按下/单指触屏 操作逻辑
+        this.stage.on('mousedown touchstart', (e) => {
             const tool = state.ui.currentTool;
+            // 右键/中键/抓手工具 -> 开启全局平移
             if (e.evt.button === 1 || e.evt.button === 2 || tool === 'pan' || (tool === 'pointer' && e.target === this.stage)) { this.stage.draggable(true); return; }
 
             this.selectionStartPos = this.stage.getRelativePointerPosition();
 
-            // ✅ 测量工具逻辑
             if (tool === 'measure') {
                 this.isMeasuring = true;
                 this.measureLine.points([this.selectionStartPos.x, this.selectionStartPos.y, this.selectionStartPos.x, this.selectionStartPos.y]);
-                this.measureLine.visible(true);
-                this.measureText.visible(true);
-                return;
+                this.measureLine.visible(true); this.measureText.visible(true); return;
             }
 
             if ((tool !== 'select-box' && tool !== 'select-lasso') || e.target !== this.stage) return;
@@ -62,29 +123,28 @@ export class Renderer {
             if (!e.evt.ctrlKey && !e.evt.metaKey && !e.evt.shiftKey) state.clearSelection();
         });
 
-        this.stage.on('click', (e) => { if (state.ui.currentTool === 'pointer' && e.target === this.stage) state.clearSelection(); });
+        // 4. 单击空白处清空选择
+        this.stage.on('click tap', (e) => { if (state.ui.currentTool === 'pointer' && e.target === this.stage) state.clearSelection(); });
 
+        // 5. 鼠标/单指滑动逻辑
         let lastCursorTime = 0;
         this.stage.on('pointermove', () => {
+            // 如果是双指操作，中止内部工具逻辑
+            if (this.stage.getPointerPosition() && this.stage.getPointerPosition().touches && this.stage.getPointerPosition().touches.length > 1) return;
+
             const pos = this.stage.getRelativePointerPosition();
             if (!pos) return;
 
-            // 完美的绝对坐标逆向转换
             let absoluteX = state.ui.viewMode === 'back' ? this.stage.width() - pos.x : pos.x;
-
             if (Date.now() - lastCursorTime > 30) {
                 state.broadcastCursor({ x: absoluteX, y: pos.y });
                 lastCursorTime = Date.now();
             }
 
-            // ✅ 测量尺拉伸计算逻辑
             if (this.isMeasuring) {
                 this.measureLine.points([this.selectionStartPos.x, this.selectionStartPos.y, pos.x, pos.y]);
-                const dx = pos.x - this.selectionStartPos.x;
-                const dy = pos.y - this.selectionStartPos.y;
-                // 1像素 ≈ 0.5毫米 (因为我们设定的 18650 电池半径是 18px = 物理9mm)
+                const dx = pos.x - this.selectionStartPos.x; const dy = pos.y - this.selectionStartPos.y;
                 const distanceMM = (Math.sqrt(dx * dx + dy * dy) * 0.5).toFixed(1);
-
                 this.measureText.text(`${distanceMM} mm`);
                 this.measureText.position({ x: this.selectionStartPos.x + dx / 2 + 10, y: this.selectionStartPos.y + dy / 2 + 10 });
                 return;
@@ -95,15 +155,10 @@ export class Renderer {
             else if (state.ui.currentTool === 'select-lasso') { this.lassoPoints.push(pos.x, pos.y); this.lassoLine.points(this.lassoPoints); }
         });
 
-        this.stage.on('mouseup', (e) => {
+        // 6. 抬起逻辑
+        this.stage.on('mouseup touchend', (e) => {
             this.stage.draggable(false);
-
-            if (this.isMeasuring) {
-                this.isMeasuring = false;
-                this.measureLine.visible(false);
-                this.measureText.visible(false);
-                return;
-            }
+            if (this.isMeasuring) { this.isMeasuring = false; this.measureLine.visible(false); this.measureText.visible(false); return; }
 
             if (!this.isSelecting) return;
             this.isSelecting = false;
@@ -124,7 +179,7 @@ export class Renderer {
                     if (!cell.isLocked && this.isPointInPolygon(renderX, cell.cy, this.lassoPoints)) newlySelectedIds.push(cell.id);
                 });
             }
-            if (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey) state.selectCells(Array.from(new Set([...state.ui.selectedCells, ...newlySelectedIds])));
+            if (e.evt && (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey)) state.selectCells(Array.from(new Set([...state.ui.selectedCells, ...newlySelectedIds])));
             else state.selectCells(newlySelectedIds);
         });
 

@@ -1,0 +1,141 @@
+/* ================= 移动端专属适配 (屏幕宽度 <= 768px 时生效) ================= */
+
+/* PC 端默认隐藏移动端专属元素 */
+#mobile-header {
+    display: none;
+}
+
+#mobile-overlay {
+    display: none;
+}
+
+@media (max-width: 768px) {
+
+    /* 1. 移动端顶部导航栏 */
+    #mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 15px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 50px;
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+        z-index: 1500;
+        padding: 0 15px;
+        box-sizing: border-box;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    #btn-mobile-menu {
+        background: transparent;
+        border: none;
+        color: #38bdf8;
+        font-size: 24px;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* 2. 侧边栏改造为左侧滑出的“抽屉(Drawer)” */
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        height: 100vh;
+        width: 85%;
+        max-width: 320px;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 2000;
+        padding-bottom: 80px;
+        /* 留出底部空间 */
+    }
+
+    #sidebar.open {
+        left: 0;
+    }
+
+    /* 侧边栏展开时的暗色背景遮罩 */
+    #mobile-overlay {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(2px);
+        z-index: 1999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+    }
+
+    #mobile-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* 3. 工具栏沉底 (方便大拇指操作) */
+    #toolbar {
+        top: auto;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 400px;
+        justify-content: space-around;
+        padding: 8px;
+        border-radius: 12px;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+    }
+
+    .tool-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    /* 工具箱下拉菜单向上弹出 */
+    .tool-dropdown-content {
+        top: auto;
+        bottom: calc(100% + 5px);
+        flex-direction: column;
+    }
+
+    /* 4. 画布区域让出顶部空间 */
+    #canvas-container {
+        height: calc(100vh - 50px);
+        margin-top: 50px;
+    }
+
+    /* 5. 悬浮面板 (图层、网络) 适配小屏幕 */
+    .floating-panel {
+        top: 60px !important;
+        right: 5% !important;
+        left: 5% !important;
+        width: 90% !important;
+        bottom: auto !important;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    /* 6. 右下角联机 FAB 按钮适当上移，避免和工具栏打架 */
+    .fab-container {
+        bottom: 85px;
+        right: 15px;
+    }
+
+    .fab-main {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+
+    /* 7. 隐藏状态栏 (小屏幕放不下) */
+    #status-bar {
+        display: none;
+    }
+}

@@ -3,15 +3,23 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pack Architect - 2D CAD v6.5 (Pro Sync)</title>
-    <script src="js/lib/konva.min.js"></script>
-    <script src="js/lib/peerjs.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pack Architect - 2D CAD v7.0 (Mobile Ready)</title>
+    <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/mobile.css">
 </head>
 
 <body>
+    <div id="mobile-header">
+        <button id="btn-mobile-menu">☰</button>
+        <span class="brand">⚡ PACK ARCHITECT</span>
+    </div>
+
+    <div id="mobile-overlay"></div>
+
     <div id="sidebar">
-        <div class="brand">⚡ PACK ARCHITECT</div>
 
         <div class="panel-section">
             <div class="section-title">工具与视图</div>
