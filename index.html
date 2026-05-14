@@ -72,18 +72,26 @@
     <div id="toolbar">
         <div class="tool-dropdown">
             <button class="tool-btn active" id="tool-pointer" title="默认指针/移动 (V)">👆</button>
-            <div class="tool-dropdown-content">
+            <div class="tool-dropdown-content" id="main-dropdown">
                 <button class="tool-btn sub-btn" id="tool-select-box" title="矩形框选 (B)">🔲</button>
                 <button class="tool-btn sub-btn" id="tool-select-lasso" title="套索框选 (L)">〽️</button>
                 <button class="tool-btn sub-btn" id="tool-polarity" title="极性反转 (P)">🔄</button>
                 <button class="tool-btn sub-btn" id="tool-pan" title="全局抓手 (H)">✋</button>
             </div>
         </div>
-        <button class="tool-btn" id="tool-wire" title="镍片连线笔 (W)">✏️</button>
+        <button class="tool-btn" id="tool-wire" title="单点连线 (W)">✏️</button>
         <button class="tool-btn" id="tool-measure" title="距离测量卡尺 (M)">📏</button>
         <div class="divider"></div><button class="tool-btn" id="btn-lock" title="锁定/解锁图元 (K)">🔒</button>
         <div class="divider"></div><button class="tool-btn" id="btn-undo" title="撤销 (Ctrl+Z)">↩️</button>
         <button class="tool-btn" id="btn-redo" title="重做 (Ctrl+Y)">↪️</button>
+    </div>
+
+    <div id="fab-container" class="fab-container">
+        <button class="fab-main" id="fab-main">⌘</button>
+        <div class="fab-menu" id="fab-menu">
+            <button class="fab-item" id="btn-lan-scan" title="打开联机控制台">📡</button>
+            <button class="fab-item" id="btn-snapshot" title="导出制造级图纸与BOM">📸</button>
+        </div>
     </div>
 
     <div id="layer-panel" class="floating-panel" style="top: 20px; right: 20px;">
@@ -124,13 +132,6 @@
         </div>
     </div>
 
-    <div id="fab-container" class="fab-container">
-        <button class="fab-main" id="fab-main">⌘</button>
-        <div class="fab-menu" id="fab-menu">
-            <button class="fab-item" id="btn-lan-scan" title="打开联机控制台">📡</button>
-            <button class="fab-item" title="功能预留">⚙️</button>
-        </div>
-    </div>
 
     <div id="modal-overlay" class="modal-overlay" style="display: none;">
         <div class="modal-box">
@@ -147,13 +148,29 @@
     <div id="canvas-container">
         <div id="status-bar">
             电芯: <span id="cell-count">0</span> | 连线: <span id="wire-count">0</span>
-            <span style="color: #475569; margin: 0 10px;">|</span> <span id="save-status" style="color: #38bdf8;">💾
-                自动保存</span>
+            <span style="color: #475569; margin: 0 10px;">|</span>
+            <span id="pack-stats" style="color:#fbbf24; font-weight: bold; margin-right: 10px;">(未连接)</span>
+            <span id="save-status" style="color: #38bdf8;">💾 自动保存</span>
             <span style="color: #475569; margin: 0 10px;">|</span> <span id="p2p-status-indicator"
                 style="color: #64748b; font-weight: bold;">📡 局域网: 离线</span>
         </div>
     </div>
     <script type="module" src="js/main.js"></script>
+
+    <div id="short-circuit-modal" class="modal-overlay" style="display: none; z-index: 10000;">
+        <div class="modal-box"
+            style="border-color: #ef4444; background: rgba(30,41,59,0.95); box-shadow: 0 0 40px rgba(239, 68, 68, 0.6);">
+            <h2 style="color: #ef4444; margin-top: 0; font-size: 24px;">⚠️ 严重短路风险</h2>
+            <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5; margin: 20px 0;">
+                系统内核检测到正负极之间存在直接导通的零电阻通路！<br>
+                引起短路的错误连线已被<span style="color: #ef4444; font-weight: bold;">标红警告</span>。
+            </p>
+            <p style="color: #94a3b8; font-size: 12px; margin-bottom: 20px;">如不修正直接进行物理装配，将可能导致电芯起火爆炸。</p>
+            <button id="btn-close-warning"
+                style="background: #ef4444; border-color: #b91c1c; font-size: 16px; padding: 10px;">🛡️
+                我已知晓，立即排查</button>
+        </div>
+    </div>
 </body>
 
 </html>

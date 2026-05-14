@@ -231,7 +231,17 @@ export class Renderer {
             const cell1 = doc.cells.find(c => c.id === bar.from); const cell2 = doc.cells.find(c => c.id === bar.to);
             if (!cell1 || !cell2) return;
             let x1 = ui.viewMode === 'back' ? this.stage.width() - cell1.cx : cell1.cx; let x2 = ui.viewMode === 'back' ? this.stage.width() - cell2.cx : cell2.cx;
-            const line = new Konva.Line({ points: [x1, cell1.cy, x2, cell2.cy], stroke: '#fbbf24', strokeWidth: 12, lineCap: 'round', lineJoin: 'round', shadowColor: '#000', shadowBlur: 4, shadowOffset: { x: 2, y: 2 }, shadowOpacity: 0.5 });
+
+            // 🌟 获取分析数据，判断当前这根线是否导致了短路
+            const isShorted = state.analysis && state.analysis.shortedBusbars.includes(bar.id);
+            const lineColor = isShorted ? '#ef4444' : '#fbbf24'; // 短路变血红色
+            const glowColor = isShorted ? '#ef4444' : '#000';
+
+            const line = new Konva.Line({
+                points: [x1, cell1.cy, x2, cell2.cy],
+                stroke: lineColor, strokeWidth: 12, lineCap: 'round', lineJoin: 'round',
+                shadowColor: glowColor, shadowBlur: isShorted ? 15 : 4, shadowOffset: { x: 2, y: 2 }, shadowOpacity: 0.8
+            });
             line.on('dblclick', () => state.removeBusbar(index)); this.layers.busbar.add(line);
         });
         this.layers.busbar.draw();

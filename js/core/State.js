@@ -1,5 +1,5 @@
 import { eventBus } from './EventBus.js';
-
+import { TopologyEngine } from './TopologyEngine.js'; // 🌟 新增导入
 class State {
     constructor() {
         this.doc = { cells: [], busbars: [] };
@@ -158,12 +158,16 @@ class State {
     clearAll() { this.doc.cells = []; this.doc.busbars = []; this.idCounters = { cell: 1, busbar: 1 }; this.ui.wireStartCell = null; this.commitAction('清空画布'); }
     removeBusbar(index) { if (this.ui.currentTool === 'pointer') { this.doc.busbars.splice(index, 1); this.commitAction('删除连线'); } }
     generateLayout(type, s, p, centerX, centerY) { let newIds = []; const hexStep = this.ui.gridSize * (Math.sqrt(3) / 2); const rowHeight = type === 'matrix' ? this.ui.gridSize : hexStep; const colWidth = type === 'fishscale' ? hexStep : this.ui.gridSize; const startX = centerX - (p * colWidth) / 2; const startY = centerY - (s * rowHeight) / 2; for (let r = 0; r < s; r++) { const polarity = (r % 2 === 0) ? 'positive' : 'negative'; for (let c = 0; c < p; c++) { let offsetX = 0; let offsetY = 0; if (type === 'honeycomb') offsetX = (r % 2 === 1) ? (this.ui.gridSize / 2) : 0; if (type === 'fishscale') offsetY = (c % 2 === 1) ? (this.ui.gridSize / 2) : 0; const id = `C${this.idCounters.cell++}`; this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false, voltage: '', resistance: '' }); newIds.push(id); } } this.ui.selectedCells = newIds; this.ui.currentTool = 'pointer'; this.commitAction(`生成 ${s}S${p}P`); }
-    handleCellClick(id, isMultiSelect = false) { const cell = this.doc.cells.find(c => c.id === id); if (!cell) return; if (this.ui.currentTool === 'pointer') { if (isMultiSelect) { if (this.ui.selectedCells.includes(id)) this.ui.selectedCells = this.ui.selectedCells.filter(c => c !== id); else this.ui.selectedCells.push(id); } else { this.ui.selectedCells = [id]; } this.notify(); } else if (this.ui.currentTool === 'polarity' && !cell.isLocked) { cell.polarity = cell.polarity === 'positive' ? 'negative' : 'positive'; this.commitAction('翻转极性'); } else if (this.ui.currentTool === 'wire') { if (!this.ui.wireStartCell) { this.ui.wireStartCell = id; this.notify(); } else { if (this.ui.wireStartCell !== id) { const exists = this.doc.busbars.some(b => (b.from === this.ui.wireStartCell && b.to === id) || (b.from === id && b.to === this.ui.wireStartCell)); if (!exists) { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: this.ui.wireStartCell, to: id }); this.ui.wireStartCell = null; this.commitAction('添加连线'); return; } } this.ui.wireStartCell = null; this.notify(); } } }
+    handleCellClick(id, isMultiSelect = false) { const cell = this.doc.cells.find(c => c.id === id); if (!cell) return; if (this.ui.currentTool === 'pointer') { if (isMultiSelect) { if (this.ui.selectedCells.includes(id)) this.ui.selectedCells = this.ui.selectedCells.filter(c => c !== id); else this.ui.selectedCells.push(id); } else { this.ui.selectedCells = [id]; } this.notify(); } else if (this.ui.currentTool === 'polarity' && !cell.isLocked) { cell.polarity = cell.polarity === 'positive' ? 'negative' : 'positive'; this.commitAction('翻转极性'); } else if (this.ui.currentTool === 'wire') { if (!this.ui.wireStartCell) { this.ui.wireStartCell = id; this.notify(); } else { if (this.ui.wireStartCell !== id) { const exists = this.doc.busbars.some(b => (b.from === this.ui.wireStartCell && b.to === id) || (b.from === id && b.to === this.ui.wireStartCell)); if (!exists) { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: this.ui.wireStartCell, to: id, side: this.ui.viewMode }); this.ui.wireStartCell = null; this.commitAction('添加连线'); return; } } this.ui.wireStartCell = null; this.notify(); } } }
     toggleLayerVisibility(layerName) { this.ui.layerVisibility[layerName] = !this.ui.layerVisibility[layerName]; this.notify(); }
     selectCells(cellIds) { this.ui.selectedCells = cellIds; this.notify(); }
     clearSelection() { this.ui.selectedCells = []; this.notify(); }
     setTool(tool) { this.ui.currentTool = tool; this.ui.wireStartCell = null; this.notify(); }
     toggleSnap() { this.ui.isSnapping = !this.ui.isSnapping; this.notify(); }
-    notify() { this.saveToLocal(); eventBus.emit('state:changed', { doc: this.doc, ui: this.ui, history: this.history, historyIndex: this.historyIndex }); }
+    notify() {
+        this.saveToLocal();
+        this.analysis = TopologyEngine.analyze(this.doc);
+        eventBus.emit('state:changed', { doc: this.doc, ui: this.ui, history: this.history, historyIndex: this.historyIndex, analysis: this.analysis });
+    }
 }
 export const state = new State();

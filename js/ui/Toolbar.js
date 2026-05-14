@@ -159,6 +159,80 @@ export function initToolbar(renderer) {
     document.getElementById('tool-measure').onclick = () => state.setTool('measure'); // ✅ 绑定卡尺
     document.getElementById('btn-undo').onclick = () => state.undo(); document.getElementById('btn-redo').onclick = () => state.redo();
 
+    // 🌟 一键生成正反面快照与参数BOM表引擎
+    const btnSnapshot = document.getElementById('btn-snapshot');
+    if (btnSnapshot) {
+        btnSnapshot.onclick = async () => {
+            // 1. 临时隐藏交互 UI 层
+            const originalUiVis = state.ui.layerVisibility.ui;
+            state.ui.layerVisibility.ui = false; state.notify();
+            await new Promise(r => setTimeout(r, 100)); // 等待渲染
+
+            // 2. 抓取正面与反面
+            const origView = state.ui.viewMode;
+            if (origView !== 'front') { state.ui.viewMode = 'front'; state.notify(); await new Promise(r => setTimeout(r, 50)); }
+            const frontDataURL = renderer.stage.toDataURL({ pixelRatio: 2 });
+
+            state.ui.viewMode = 'back'; state.notify(); await new Promise(r => setTimeout(r, 50));
+            const backDataURL = renderer.stage.toDataURL({ pixelRatio: 2 });
+
+            // 3. 恢复现场
+            state.ui.viewMode = origView; state.ui.layerVisibility.ui = originalUiVis; state.notify();
+
+            // 4. 离屏绘制暗黑科技风图纸
+            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+            const img1 = new Image(); const img2 = new Image();
+            img1.src = frontDataURL; img2.src = backDataURL;
+            await Promise.all([new Promise(r => img1.onload = r), new Promise(r => img2.onload = r)]);
+
+            const margin = 50; const headerHeight = 100;
+            canvas.width = img1.width + img2.width + margin * 3; canvas.height = Math.max(img1.height, img2.height) + headerHeight + margin * 2;
+
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height); // 机甲灰背景
+            ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 42px monospace';
+            ctx.fillText('⚡ PACK ARCHITECT - MANUFACTURING BLUEPRINT', margin, 60);
+
+            ctx.font = 'bold 28px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('FRONT VIEW (正面)', margin, headerHeight + margin + img1.height + 40);
+            ctx.fillText('BACK VIEW (反面)', margin * 2 + img1.width, headerHeight + margin + img2.height + 40);
+
+            ctx.drawImage(img1, margin, headerHeight + margin); ctx.drawImage(img2, margin * 2 + img1.width, headerHeight + margin);
+
+            // 触发图片下载
+            const aImg = document.createElement('a'); aImg.href = canvas.toDataURL("image/png"); aImg.download = `Blueprint_${Date.now()}.png`; aImg.click();
+
+            // 5. 生成硬件参数 TXT 文档
+            let textData = "⚡ PACK ARCHITECT - 制造参数核对表 ⚡\n========================================\n\n";
+            const a = state.analysis;
+            textData += `[电学逻辑推断]\n拓扑架构: ${a.s}S${a.p}P\n额定总电压: ${a.v} V\n评估总内阻: ${a.r} mΩ\n状态: ${a.isShorted ? '严重短路！不可制造！' : '拓扑正常'}\n\n`;
+            textData += "[电芯详细矩阵]\nID\t| 电压 (V)\t| 内阻 (mΩ)\n----------------------------------------\n";
+            state.doc.cells.forEach(c => textData += `${c.id}\t| ${c.voltage || '未测'}\t\t| ${c.resistance || '未测'}\n`);
+
+            const aTxt = document.createElement('a'); aTxt.href = URL.createObjectURL(new Blob([textData], { type: "text/plain;charset=utf-8" }));
+            aTxt.download = `BOM_Data_${Date.now()}.txt`; aTxt.click();
+        };
+    }
+
+    // 在 eventBus.on('state:changed', ...) 内部的最后，增加状态栏更新与弹窗触发逻辑
+    eventBus.on('state:changed', ({ doc, ui, history, historyIndex, analysis }) => {
+        // ... 原有的 UI 更新代码 ...
+
+        // 🌟 更新底部状态栏（智能计算结果）
+        if (analysis) {
+            let statsText = `当前拓扑: ${analysis.connectedCount} 节已连接 | 架构推测: ${analysis.s}S${analysis.p}P | 理论电压: ${analysis.v}V`;
+            if (analysis.isShorted) statsText = "⛔ 严重短路，数据异常！";
+            safelySetText('pack-stats', statsText);
+
+            // 触发防爆弹窗
+            const modal = document.getElementById('short-circuit-modal');
+            if (modal) modal.style.display = analysis.isShorted ? 'flex' : 'none';
+        }
+    });
+
+    // 绑定防爆弹窗的关闭按钮
+    const closeWarnBtn = document.getElementById('btn-close-warning');
+    if (closeWarnBtn) closeWarnBtn.onclick = () => document.getElementById('short-circuit-modal').style.display = 'none';
+
     window.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; if (e.code === 'Space') { e.preventDefault(); renderer.stage.draggable(true); document.body.classList.add('grabbing-mode'); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); state.undo(); } if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); state.redo(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelected(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteSelected(); } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); state.deleteSelected(); } });
     window.addEventListener('keyup', (e) => { if (e.code === 'Space') { renderer.stage.draggable(false); document.body.classList.remove('grabbing-mode'); } if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; const key = e.key.toLowerCase(); if (key === 'v') state.setTool('pointer'); if (key === 'b') state.setTool('select-box'); if (key === 'l') state.setTool('select-lasso'); if (key === 'p') state.setTool('polarity'); if (key === 'h') state.setTool('pan'); if (key === 'm') state.setTool('measure'); if (key === 'w') state.setTool('wire'); if (key === 'k') state.toggleLockSelected(); });
 
