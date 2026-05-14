@@ -97,32 +97,33 @@
         pointer-events: auto;
     }
 
-    /* ✅ 修复3：悬浮胶囊式横向工具条 */
+    /* ================= ✅ 修复：移动端悬浮工具栏 (允许溢出) ================= */
     #toolbar {
         position: fixed !important;
         top: auto !important;
         bottom: 20px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        width: auto !important;
-        max-width: 90%;
+        width: 90% !important;
+        max-width: 400px !important;
         background: rgba(30, 41, 59, 0.95) !important;
         backdrop-filter: blur(15px) !important;
         padding: 8px 12px !important;
         border-radius: 30px !important;
+
         display: flex !important;
-        justify-content: flex-start !important;
+        justify-content: center !important;
+        /* 居中分布，防止挤压 */
+        flex-wrap: wrap !important;
+        /* 核心：允许换行，坚决不使用 scroll */
         gap: 10px !important;
+
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6) !important;
         z-index: 1000 !important;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch;
-        /* 允许横向滑动找工具 */
-    }
 
-    #toolbar::-webkit-scrollbar {
-        display: none;
+        /* ✅ 终极修复：释放边界，允许气泡菜单向上飞出容器！ */
+        overflow: visible !important;
     }
 
     .tool-btn {
@@ -134,7 +135,7 @@
         border-radius: 50% !important;
     }
 
-    /* 气泡横向子菜单 */
+    /* ================= ✅ 完美向上“垂直”弹射的气泡菜单 ================= */
     .tool-dropdown {
         position: relative !important;
         display: block !important;
@@ -144,27 +145,49 @@
         position: absolute !important;
         top: auto !important;
         bottom: calc(100% + 15px) !important;
+        /* 绝对定位在主按钮正上方 */
         left: 50% !important;
-        transform: translateX(-50%) scale(0.9) !important;
-        flex-direction: row !important;
-        gap: 8px !important;
+
+        /* 居中对齐并向下偏移 15px 准备动画 */
+        transform: translateX(-50%) translateY(15px) !important;
+
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+
         background: rgba(30, 41, 59, 0.95) !important;
         backdrop-filter: blur(15px) !important;
-        border-radius: 30px !important;
-        padding: 6px 8px !important;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5) !important;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.2s ease-out;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 24px !important;
+        /* 增加圆角，像一个垂直胶囊 */
+        padding: 8px !important;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.8) !important;
+        border: 1px solid #38bdf8 !important;
+        /* 高科技蓝光边框 */
+
+        /* ✅ 核心修改：改为垂直纵向排列 (Column) */
         display: flex !important;
+        flex-direction: column-reverse !important;
+        /* 使用反向列，最常用的工具在最下面（离手指最近） */
+        width: 50px !important;
+        /* 固定宽度，刚好容纳一个按钮 */
+        gap: 8px !important;
+        /* 按钮之间的垂直间距 */
+        z-index: 9999 !important;
     }
 
+    /* 当触发展开时 */
     .tool-dropdown.mobile-open .tool-dropdown-content {
-        opacity: 1;
-        visibility: visible;
-        transform: translateX(-50%) scale(1) !important;
-        pointer-events: auto;
+        opacity: 1 !important;
+        visibility: visible !important;
+        /* 完美弹回原位，形成向上垂直升起的视觉效果 */
+        transform: translateX(-50%) translateY(0) !important;
+    }
+
+    /* 确保子按钮在垂直胶囊内完美居中 */
+    .tool-dropdown-content .sub-btn {
+        margin: 0 !important;
+        width: 44px !important;
+        height: 44px !important;
     }
 
     .fab-container {

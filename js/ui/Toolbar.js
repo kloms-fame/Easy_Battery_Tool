@@ -5,32 +5,38 @@ const safelySetText = (id, text) => { const el = document.getElementById(id); if
 const safelyToggleClass = (id, className, condition) => { const el = document.getElementById(id); if (el) el.classList.toggle(className, condition); };
 
 export function initToolbar(renderer) {
-    // ✅ 完美的移动端悬浮子菜单切换逻辑
+    // ✅ 完美的移动端悬浮子菜单切换逻辑 (使用 pointerdown 防丢帧)
     const dropdownBtn = document.getElementById('tool-pointer');
     const dropdownContainer = dropdownBtn.parentElement;
 
-    dropdownBtn.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768) {
-            e.stopPropagation(); // 关键！阻止事件穿透到画布，避免刚打开就被收起
-            dropdownContainer.classList.toggle('mobile-open');
-        }
-    });
-
-    document.querySelectorAll('.sub-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    if (dropdownBtn && dropdownContainer) {
+        // 1. 点击主按钮展开/收起
+        dropdownBtn.addEventListener('click', (e) => {
             if (window.innerWidth <= 768) {
-                e.stopPropagation();
-                dropdownContainer.classList.remove('mobile-open');
+                e.preventDefault();
+                e.stopPropagation(); // 阻止事件穿透
+                dropdownContainer.classList.toggle('mobile-open');
             }
         });
-    });
 
-    // 点击其他区域自动收起气泡菜单
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768 && !dropdownContainer.contains(e.target)) {
-            dropdownContainer.classList.remove('mobile-open');
-        }
-    });
+        // 2. 核心修复：使用 pointerdown 全局监听。只要手指按下或鼠标点击在气泡范围外，瞬间收起！
+        document.addEventListener('pointerdown', (e) => {
+            if (window.innerWidth <= 768) {
+                if (!dropdownContainer.contains(e.target)) {
+                    dropdownContainer.classList.remove('mobile-open');
+                }
+            }
+        });
+
+        // 3. 点击任意子选项后，自动收起气泡
+        document.querySelectorAll('.sub-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    dropdownContainer.classList.remove('mobile-open');
+                }
+            });
+        });
+    }
     document.getElementById('btn-add-cell').onclick = () => state.addCell((renderer.stage.width() / 2 - renderer.stage.x()) / renderer.stage.scaleX(), (renderer.stage.height() / 2 - renderer.stage.y()) / renderer.stage.scaleY());
     document.getElementById('btn-clear').onclick = () => state.clearAll();
     document.getElementById('btn-snap').onclick = () => state.toggleSnap();
