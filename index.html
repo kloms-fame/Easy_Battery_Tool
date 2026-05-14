@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pack Architect - 2D CAD v5.0 (P2P Co-op)</title>
+    <title>Pack Architect - 2D CAD v6.0</title>
     <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
@@ -21,9 +21,7 @@
         </div>
 
         <details class="panel-section" open>
-            <summary class="section-title" style="cursor: pointer; user-select: none;">
-                📦 参数化生成引擎 (点击折叠)
-            </summary>
+            <summary class="section-title" style="cursor: pointer; user-select: none;">📦 参数化生成引擎 (点击折叠)</summary>
             <div style="margin-top: 15px;">
                 <select id="select-layout" class="layout-input"
                     style="width: 100%; margin-bottom: 8px; text-align: left;">
@@ -32,10 +30,8 @@
                     <option value="fishscale">🐟 竖向鱼鳞 (Fish Scale)</option>
                 </select>
                 <div style="display: flex; gap: 10px; margin-bottom: 8px;">
-                    <input type="number" id="input-s" placeholder="S(行)" value="10" min="1" class="layout-input"
-                        title="串联/行数">
-                    <input type="number" id="input-p" placeholder="P(列)" value="4" min="1" class="layout-input"
-                        title="并联/列数">
+                    <input type="number" id="input-s" placeholder="S(行)" value="10" min="1" class="layout-input">
+                    <input type="number" id="input-p" placeholder="P(列)" value="4" min="1" class="layout-input">
                 </div>
                 <button id="btn-generate">⚡ 追加生成并选中</button>
                 <button id="btn-clear" class="danger" style="margin-top: 5px;">🗑️ 清空整个画布</button>
@@ -48,18 +44,12 @@
             <div style="font-size: 12px; margin-bottom: 10px; color: #cbd5e1; font-weight: bold;"
                 id="prop-selection-info">未选中图元</div>
             <div style="display: flex; gap: 10px; margin-bottom: 5px;">
-                <div style="flex: 1;">
-                    <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">电压 (V)</label>
-                    <input type="number" id="prop-voltage" class="layout-input" style="width: 100%; padding: 4px;"
-                        step="0.01" placeholder="3.6">
-                </div>
-                <div style="flex: 1;">
-                    <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">内阻 (mΩ)</label>
-                    <input type="number" id="prop-resistance" class="layout-input" style="width: 100%; padding: 4px;"
-                        step="0.1" placeholder="15.2">
-                </div>
+                <div style="flex: 1;"><label style="font-size: 10px; color: #94a3b8;">电压 (V)</label><input type="number"
+                        id="prop-voltage" class="layout-input" style="width: 100%; padding: 4px;" step="0.01"></div>
+                <div style="flex: 1;"><label style="font-size: 10px; color: #94a3b8;">内阻 (mΩ)</label><input
+                        type="number" id="prop-resistance" class="layout-input" style="width: 100%; padding: 4px;"
+                        step="0.1"></div>
             </div>
-            <div style="font-size: 10px; color: #64748b; margin-top: 5px;">*输入后自动保存</div>
         </div>
 
         <div class="panel-section">
@@ -67,14 +57,6 @@
             <button id="btn-export">💾 导出 JSON 项目</button>
             <button id="btn-import">📂 导入 JSON 项目</button>
             <input type="file" id="file-import" accept=".json" style="display: none;">
-        </div>
-
-        <div style="font-size: 11px; color: #64748b; line-height: 1.6;">
-            <strong>高级操作:</strong><br>
-            • 右键/中键：平移画布<br>
-            • Space / H键：全局抓手<br>
-            • Ctrl + 点击/框选：叠加选中<br>
-            • K / 🔒：锁定/解锁图元
         </div>
     </div>
 
@@ -89,10 +71,8 @@
             </div>
         </div>
         <button class="tool-btn" id="tool-wire" title="镍片连线笔 (W)">✏️</button>
-        <div class="divider"></div>
-        <button class="tool-btn" id="btn-lock" title="锁定/解锁选中图元 (K)">🔒</button>
-        <div class="divider"></div>
-        <button class="tool-btn" id="btn-undo" title="撤销 (Ctrl+Z)">↩️</button>
+        <div class="divider"></div><button class="tool-btn" id="btn-lock" title="锁定/解锁图元 (K)">🔒</button>
+        <div class="divider"></div><button class="tool-btn" id="btn-undo" title="撤销 (Ctrl+Z)">↩️</button>
         <button class="tool-btn" id="btn-redo" title="重做 (Ctrl+Y)">↪️</button>
     </div>
 
@@ -112,33 +92,24 @@
         </details>
     </div>
 
-    <div id="network-panel" class="floating-panel"
-        style="display: none; bottom: 100px; right: 30px; width: 280px; transform-origin: bottom right;">
+    <div id="network-panel" class="floating-panel" style="display: none; bottom: 100px; right: 20px; width: 280px;">
         <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <span>📡 P2P 联机控制台</span>
-            <button id="btn-close-network"
-                style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:16px;">✖</button>
+            <span>📡 P2P 联机协作台</span><button id="btn-close-network"
+                style="background:none; border:none; color:#94a3b8; cursor:pointer;">✖</button>
         </div>
         <div style="padding: 10px;">
             <div style="font-size: 12px; color: #94a3b8; margin-bottom: 5px;">
-                本机联机码: <strong id="my-peer-id" style="color:#10b981; user-select: all; cursor: copy;"
-                    title="点击复制">获取中... ↻</strong>
+                本机联机码: <strong id="my-peer-id" style="color:#10b981; user-select: all; cursor: copy;">连接中...</strong>
             </div>
-            <div style="font-size: 10px; color: #64748b; margin-bottom: 15px;">* 将上方联机码发送给同局域网的同事即可直连</div>
-
-            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+            <div style="display: flex; gap: 5px; margin-top: 15px; margin-bottom: 10px;">
                 <input type="text" id="target-peer-id" class="layout-input" placeholder="输入对方联机码"
                     style="flex: 1; padding: 6px; font-size: 12px; text-transform: uppercase;">
                 <button id="btn-connect-peer"
                     style="width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #0284c7;">连接</button>
             </div>
-
             <div style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 10px;">
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 5px;">已连接设备 (Connections)</div>
-                <div id="connected-list" class="layer-list" style="max-height: 120px; overflow-y: auto;">
-                    <div id="no-connection-tip"
-                        style="font-size: 11px; color: #475569; text-align: center; padding: 10px;">暂无连接</div>
-                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 5px;">🟢 双向互通节点 (Connections)</div>
+                <div id="connected-list" class="layer-list" style="max-height: 120px; overflow-y: auto;"></div>
             </div>
         </div>
     </div>
@@ -146,22 +117,17 @@
     <div id="fab-container" class="fab-container">
         <div class="fab-menu" id="fab-menu">
             <button class="fab-item" id="btn-lan-scan" title="打开联机控制台">📡</button>
-            <button class="fab-item" title="通用设置">⚙️</button>
-            <button class="fab-item" title="导出快捷截图">📸</button>
         </div>
-        <button class="fab-main" id="fab-main" title="展开功能菜单">⌘</button>
+        <button class="fab-main" id="fab-main" title="展开协作菜单">⌘</button>
     </div>
 
     <div id="modal-overlay" class="modal-overlay" style="display: none;">
         <div class="modal-box">
-            <h3 style="margin-top: 0; color: #38bdf8;">🌐 收到直连请求</h3>
-            <p style="font-size: 14px; color: #e2e8f0; margin: 20px 0;">
-                设备 <strong id="req-device-name" style="color: #10b981; font-size: 16px;">未知</strong> <br>请求与您建立 P2P
-                同步连接。
-            </p>
-            <p style="font-size: 11px; color: #94a3b8; margin-bottom: 20px;">同意后，双方对画布的所有修改将实时互传同步。</p>
+            <h3 style="margin-top: 0; color: #38bdf8;">🌐 收到联机请求</h3>
+            <p style="font-size: 14px; color: #e2e8f0; margin: 20px 0;">工程师 <strong id="req-device-name"
+                    style="color: #10b981;">未知</strong> 请求建立双向同步。</p>
             <div style="display: flex; gap: 10px;">
-                <button id="btn-accept-conn" style="background: #10b981; border-color: #059669;">✅ 同意</button>
+                <button id="btn-accept-conn" style="background: #10b981; border-color: #059669;">✅ 允许同步</button>
                 <button id="btn-reject-conn" class="danger">❌ 拒绝</button>
             </div>
         </div>
@@ -169,12 +135,13 @@
 
     <div id="canvas-container">
         <div id="status-bar">
-            就绪 | 电芯: <span id="cell-count">0</span> | 连线: <span id="wire-count">0</span>
-            <span style="color: #475569; margin: 0 10px;">|</span>
-            <span id="save-status" style="color: #38bdf8;">💾 自动保存: 最新</span>
+            电芯: <span id="cell-count">0</span> | 连线: <span id="wire-count">0</span>
+            <span style="color: #475569; margin: 0 10px;">|</span> <span id="save-status" style="color: #38bdf8;">💾
+                自动保存</span>
+            <span style="color: #475569; margin: 0 10px;">|</span> <span id="p2p-status-indicator"
+                style="color: #64748b; font-weight: bold;">📡 局域网: 离线</span>
         </div>
     </div>
-
     <script type="module" src="js/main.js"></script>
 </body>
 
