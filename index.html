@@ -3,8 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pack Architect - 2D CAD v3.0</title>
-    <script src="js/lib/konva.min.js"></script>
+    <title>Pack Architect - 2D CAD v3.5</title>
+    <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -13,29 +13,33 @@
         <div class="brand">⚡ PACK ARCHITECT</div>
 
         <div class="panel-section">
-            <div class="section-title">工具模式</div>
+            <div class="section-title">工具与视图</div>
             <button id="btn-snap">网格吸附: 关</button>
             <button id="btn-view">当前视角: 正面</button>
+            <button id="btn-add-cell" style="margin-top: 10px;">+ 添加单个电芯</button>
         </div>
 
-
-        <div class="panel-section">
-            <div class="section-title">生成与操作</div>
-            <button id="btn-add-cell">+ 添加单个电芯</button>
-            <button id="btn-gen-matrix">生成 4x5 矩阵</button>
-            <button id="btn-clear" class="danger">清空画布</button>
-        </div>
-
-        <div class="panel-section">
-            <div class="section-title">参数化布局 (蜂窝结构)</div>
-            <div style="display: flex; gap: 10px; margin-bottom: 8px;">
-                <input type="number" id="input-s" placeholder="S (串联)" value="10" min="1" class="layout-input"
-                    title="串联组数 (行数)">
-                <input type="number" id="input-p" placeholder="P (并联)" value="4" min="1" class="layout-input"
-                    title="每组并联数 (列数)">
+        <details class="panel-section" open>
+            <summary class="section-title" style="cursor: pointer; user-select: none;">
+                📦 参数化生成引擎 (点击折叠)
+            </summary>
+            <div style="margin-top: 15px;">
+                <select id="select-layout" class="layout-input"
+                    style="width: 100%; margin-bottom: 8px; text-align: left;">
+                    <option value="matrix">🔲 标准矩阵 (Matrix)</option>
+                    <option value="honeycomb">🍯 横向蜂窝 (Honeycomb)</option>
+                    <option value="fishscale">🐟 竖向鱼鳞 (Fish Scale)</option>
+                </select>
+                <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+                    <input type="number" id="input-s" placeholder="S(行)" value="10" min="1" class="layout-input"
+                        title="串联/行数">
+                    <input type="number" id="input-p" placeholder="P(列)" value="4" min="1" class="layout-input"
+                        title="并联/列数">
+                </div>
+                <button id="btn-generate">⚡ 追加生成并选中</button>
+                <button id="btn-clear" class="danger" style="margin-top: 5px;">🗑️ 清空整个画布</button>
             </div>
-            <button id="btn-gen-honeycomb">🍯 生成蜂窝电池组</button>
-        </div>
+        </details>
 
         <div class="panel-section">
             <div class="section-title">文件与数据</div>
@@ -44,43 +48,40 @@
             <input type="file" id="file-import" accept=".json" style="display: none;">
         </div>
 
-
-
         <div style="font-size: 11px; color: #64748b; line-height: 1.6;">
-            <strong>漫游指南:</strong><br>
-            • 中/右键：平移 | 滚轮：缩放<br>
-            • 连线模式：依次点击两电芯连线<br>
-            • 指针模式：单击电芯翻转极性<br>
-            <strong>快捷键:</strong><br>
-            • Delete：删除选中<br>
-            • Ctrl+C/V：复制与粘贴
+            <strong>高级快捷键:</strong><br>
+            • 空白处拖拽：直接平移画布<br>
+            • Space(长按)：全局强制抓手<br>
+            • Ctrl + 点击：加选/减选电芯<br>
+            • 框选 + Ctrl：叠加选中区域<br>
+            • K / 🔒：锁定/解锁选中图元<br>
+            • Delete：删除选中图元
         </div>
     </div>
 
-    <!-- ====================== 修改：工具栏新增撤销/重做 ====================== -->
     <div id="toolbar">
         <div class="tool-dropdown">
-            <button class="tool-btn active" id="tool-pointer" title="默认指针/移动/抓手 (V)">👆</button>
+            <button class="tool-btn active" id="tool-pointer" title="默认指针/移动 (V)">👆</button>
             <div class="tool-dropdown-content">
                 <button class="tool-btn sub-btn" id="tool-select-box" title="矩形框选 (B)">🔲</button>
                 <button class="tool-btn sub-btn" id="tool-select-lasso" title="套索框选 (L)">〽️</button>
                 <button class="tool-btn sub-btn" id="tool-polarity" title="极性反转 (P)">🔄</button>
             </div>
         </div>
-
         <button class="tool-btn" id="tool-wire" title="镍片连线笔 (W)">✏️</button>
+        <div class="divider"></div>
+        <button class="tool-btn" id="btn-lock" title="锁定/解锁选中图元 (K)">🔒</button>
         <div class="divider"></div>
         <button class="tool-btn" id="btn-undo" title="撤销 (Ctrl+Z)">↩️</button>
         <button class="tool-btn" id="btn-redo" title="重做 (Ctrl+Y)">↪️</button>
     </div>
-    <!-- ==================================================================== -->
 
-    <div id="canvas-container"></div>
-
-    <div id="status-bar">
-        就绪 | 电芯: <span id="cell-count">0</span> | 连线: <span id="wire-count">0</span>
-        <span style="color: #475569; margin: 0 10px;">|</span>
-        <span id="save-status" style="color: #38bdf8;">💾 自动保存: 最新</span>
+    <div id="canvas-container">
+        <div id="status-bar">
+            就绪 | 电芯: <span id="cell-count">0</span> | 连线: <span id="wire-count">0</span>
+            <span style="color: #475569; margin: 0 10px;">|</span>
+            <span id="save-status" style="color: #38bdf8;">💾 自动保存: 最新</span>
+        </div>
     </div>
 
     <script type="module" src="js/main.js"></script>

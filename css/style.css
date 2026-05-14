@@ -242,3 +242,45 @@ button.danger {
     color: #64748b;
     font-weight: normal;
 }
+
+
+/* ================= 参数化布局与折叠面板样式 ================= */
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+details summary {
+    outline: none;
+}
+
+.layout-input {
+    width: 50%;
+    background: #0f172a;
+    color: #38bdf8;
+    border: 1px solid #475569;
+    padding: 8px;
+    border-radius: 4px;
+    outline: none;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.layout-input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 5px rgba(56, 189, 248, 0.3);
+}
+
+select.layout-input {
+    cursor: pointer;
+}
+
+select.layout-input option {
+    background-color: #0f172a;
+}
+
+/* 强制抓手光标 (按下空格时) */
+body.grabbing-mode * {
+    cursor: grabbing !important;
+}
