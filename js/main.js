@@ -12,11 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("已恢复本地草稿");
     } else {
         state.initEmptyState();
-        state.generateGrid(3, 4, renderer.stage.width(), renderer.stage.height());
+        // ✅ 修复点：使用新的 generateLayout API，默认在屏幕中央生成一个 3x4 的标准矩阵
+        const centerX = renderer.stage.width() / 2;
+        const centerY = renderer.stage.height() / 2;
+        state.generateLayout('matrix', 3, 4, centerX, centerY);
     }
 
     // ✅ 启动 WebRTC P2P 联机引擎
     state.initNetwork();
 
-    console.log("Pack Architect 5.0 Engine Started.");
+    console.log("Pack Architect 6.0 Engine Started.");
 });
