@@ -34,10 +34,32 @@ class State {
     initNetwork() {
         const shortId = Math.random().toString(36).substring(2, 6).toUpperCase();
         this.myPeerId = `PACK-${shortId}`;
-        this.peer = new Peer(this.myPeerId);
+
+        // ✅ 核心修复 1：配置多重免费 STUN 服务器矩阵，极大增强手机热点穿透力
+        this.peer = new Peer(this.myPeerId, {
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    { urls: 'stun:stun.ekiga.net' },
+                    { urls: 'stun:stun.ideasip.com' },
+                    { urls: 'stun:stun.schlund.de' }
+                ]
+            },
+            debug: 1 // 设置为 1 可以在控制台看到连接状态，不影响用户
+        });
+
         this.peer.on('open', (id) => eventBus.emit('network:ready', id));
         this.peer.on('error', (err) => eventBus.emit('network:error', err));
         this.peer.on('connection', (conn) => eventBus.emit('network:incoming', conn));
+
+        // ✅ 核心修复 2：解决 "network" 报错。信令断开时，静默自动重连
+        this.peer.on('disconnected', () => {
+            console.warn("[网络引擎] 与信令服务器断开，正在尝试静默重连...");
+            if (!this.peer.destroyed) {
+                this.peer.reconnect();
+            }
+        });
     }
 
     connectToPeer(targetId) {

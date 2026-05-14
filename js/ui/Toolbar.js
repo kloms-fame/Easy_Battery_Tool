@@ -86,12 +86,40 @@ export function initToolbar(renderer) {
 
     document.getElementById('btn-connect-peer').onclick = () => {
         const targetId = document.getElementById('target-peer-id').value.trim().toUpperCase();
-        if (targetId && targetId !== state.myPeerId) { safelySetText('btn-connect-peer', '握手中...'); state.connectToPeer(targetId); }
+        if (targetId && targetId !== state.myPeerId) {
+            safelySetText('btn-connect-peer', '打洞中...'); // 更改文案显得更极客
+            state.connectToPeer(targetId);
+
+            // ✅ 核心修复 3：增加 12 秒连接超时防卡死机制
+            setTimeout(() => {
+                const btn = document.getElementById('btn-connect-peer');
+                // 如果 12 秒后按钮仍然显示“打洞中...”，说明 WebRTC 穿透失败
+                if (btn && btn.innerText === '打洞中...') {
+                    alert("📡 建立直连失败！\n\n原因：您当前的网络（如手机热点/公司内网）可能存在严格的 NAT 防火墙，阻挡了 P2P 穿透。\n\n建议：请尝试让两台设备连接同一个普通的家用路由器 WiFi。");
+                    safelySetText('btn-connect-peer', '连接');
+                }
+            }, 12000);
+        }
     };
 
     eventBus.on('network:incoming', (conn) => { pendingConnection = conn; safelySetText('req-device-name', conn.peer); if (modalOverlay) modalOverlay.style.display = 'flex'; });
 
-    document.getElementById('btn-accept-conn').onclick = () => { if (modalOverlay) modalOverlay.style.display = 'none'; if (pendingConnection) { state.acceptConnection(pendingConnection); if (networkPanel) networkPanel.style.display = 'block'; pendingConnection = null; } };
+    document.getElementById('btn-accept-conn').onclick = () => {
+        if (modalOverlay) modalOverlay.style.display = 'none';
+        if (pendingConnection) {
+            state.acceptConnection(pendingConnection);
+            if (networkPanel) networkPanel.style.display = 'block';
+
+            // ✅ 防死等修复：12秒内未成功同步数据，自动重置连接按钮
+            setTimeout(() => {
+                if (state.connections.length === 0 || !state.connections.find(c => c.peer === pendingConnection.peer)?.open) {
+                    safelySetText('btn-connect-peer', '连接');
+                }
+            }, 12000);
+
+            pendingConnection = null;
+        }
+    };
     document.getElementById('btn-reject-conn').onclick = () => { if (modalOverlay) modalOverlay.style.display = 'none'; if (pendingConnection) { pendingConnection.close(); pendingConnection = null; } };
 
     eventBus.on('network:list_changed', (peers) => {
