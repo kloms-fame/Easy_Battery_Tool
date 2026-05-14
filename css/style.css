@@ -1,0 +1,244 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    font-family: sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+}
+
+#sidebar {
+    width: 280px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    z-index: 10;
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
+    overflow-y: auto;
+}
+
+.brand {
+    font-size: 20px;
+    font-weight: 700;
+    color: #38bdf8;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+}
+
+.panel-section {
+    margin-bottom: 20px;
+    border-top: 1px dashed #475569;
+    padding-top: 15px;
+}
+
+.section-title {
+    font-size: 12px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+button {
+    width: 100%;
+    background: #334155;
+    color: #f8fafc;
+    border: 1px solid #475569;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 8px;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+button:hover {
+    border-color: #38bdf8;
+    color: #38bdf8;
+}
+
+button.active {
+    background: #0284c7;
+    border-color: #38bdf8;
+    color: white;
+}
+
+button.danger {
+    background: #7f1d1d;
+    border-color: #ef4444;
+}
+
+#toolbar {
+    position: absolute;
+    top: 20px;
+    left: 320px;
+    background: #1e293b;
+    padding: 5px;
+    border-radius: 8px;
+    display: flex;
+    gap: 5px;
+    border: 1px solid #334155;
+    z-index: 10;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.tool-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.tool-btn.active {
+    background: #38bdf8;
+    color: #0f172a;
+}
+
+.tool-btn:hover:not(.active) {
+    background: #334155;
+}
+
+#canvas-container {
+    flex: 1;
+    position: relative;
+    background: #000000;
+    cursor: default;
+}
+
+#status-bar {
+    position: absolute;
+    bottom: 20px;
+    left: 320px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid #334155;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #10b981;
+    pointer-events: none;
+}
+
+/* 工具栏分割线 */
+#toolbar .divider {
+    width: 1px;
+    background: #475569;
+    margin: 0 5px;
+}
+
+/* ================= 工具栏下拉菜单样式 ================= */
+.tool-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.tool-dropdown-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: #1e293b;
+    min-width: 40px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    border: 1px solid #334155;
+    z-index: 20;
+    flex-direction: column;
+    padding: 2px;
+    margin-top: 5px;
+}
+
+/* ================= 工具栏下拉菜单样式 ================= */
+.tool-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* ================= 工具栏下拉菜单样式 ================= */
+.tool-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* ✅ 核心修复：用透明度+可见性替代display，添加过渡动画和延迟 */
+.tool-dropdown-content {
+    /* 永久删除 display: none; 改用透明度控制显示 */
+    display: flex;
+    position: absolute;
+    top: calc(100% + 2px);
+    /* 保留2px视觉间隙，不会出现死亡缝隙 */
+    left: 0;
+    background-color: #1e293b;
+    min-width: 40px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    border: 1px solid #334155;
+    z-index: 999;
+    /* 提高层级确保不会被遮挡 */
+    flex-direction: column;
+    padding: 5px;
+
+    /* 默认隐藏状态 */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    /* 向上偏移，实现滑入效果 */
+
+    /* 关键：过渡动画 + 离开延迟 */
+    /* 格式：属性 时长 缓动 延迟 */
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;
+}
+
+/* 鼠标悬停时显示 */
+.tool-dropdown:hover .tool-dropdown-content {
+    /* 永久删除 display: flex; */
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    /* 回到原位 */
+
+    /* 鼠标移入时立即显示，无延迟 */
+    transition-delay: 0s;
+}
+
+/* 下拉菜单子按钮样式（保持不变） */
+.sub-btn {
+    margin-bottom: 2px;
+}
+
+.sub-btn:last-child {
+    margin-bottom: 0;
+}
+
+/* ================= 参数化布局输入框样式 ================= */
+.layout-input {
+    width: 50%;
+    background: #0f172a;
+    color: #38bdf8;
+    border: 1px solid #475569;
+    padding: 8px;
+    border-radius: 4px;
+    outline: none;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    transition: 0.2s;
+}
+
+.layout-input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 5px rgba(56, 189, 248, 0.3);
+}
+
+.layout-input::placeholder {
+    color: #64748b;
+    font-weight: normal;
+}
