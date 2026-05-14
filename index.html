@@ -3,8 +3,9 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pack Architect - 2D CAD v4.5</title>
+    <title>Pack Architect - 2D CAD v5.0 (P2P Co-op)</title>
     <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -58,7 +59,7 @@
                         step="0.1" placeholder="15.2">
                 </div>
             </div>
-            <div style="font-size: 10px; color: #64748b; margin-top: 5px;">*输入后自动保存，清空可取消显示</div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 5px;">*输入后自动保存</div>
         </div>
 
         <div class="panel-section">
@@ -71,7 +72,7 @@
         <div style="font-size: 11px; color: #64748b; line-height: 1.6;">
             <strong>高级操作:</strong><br>
             • 右键/中键：平移画布<br>
-            • Space(长按) / H键：全局抓手<br>
+            • Space / H键：全局抓手<br>
             • Ctrl + 点击/框选：叠加选中<br>
             • K / 🔒：锁定/解锁图元
         </div>
@@ -95,28 +96,75 @@
         <button class="tool-btn" id="btn-redo" title="重做 (Ctrl+Y)">↪️</button>
     </div>
 
-    <div id="layer-panel" class="floating-panel">
+    <div id="layer-panel" class="floating-panel" style="top: 20px; right: 20px;">
         <details open>
             <summary class="panel-header">📚 图层系统 (Layers)</summary>
             <div class="layer-list">
-                <div class="layer-item" data-layer="labels">
-                    <span class="layer-toggle">👁️</span>
-                    <span class="layer-name">🏷️ 属性铭牌 (Labels)</span>
-                </div>
-                <div class="layer-item" data-layer="cell">
-                    <span class="layer-toggle">👁️</span>
-                    <span class="layer-name">🔋 电芯主体 (Cells)</span>
-                </div>
-                <div class="layer-item" data-layer="busbar">
-                    <span class="layer-toggle">👁️</span>
-                    <span class="layer-name">⚡ 连接镍片 (Busbars)</span>
-                </div>
-                <div class="layer-item" data-layer="ui">
-                    <span class="layer-toggle">👁️</span>
-                    <span class="layer-name">📐 交互与辅助 (UI)</span>
-                </div>
+                <div class="layer-item" data-layer="labels"><span class="layer-toggle">👁️</span><span
+                        class="layer-name">🏷️ 属性铭牌 (Labels)</span></div>
+                <div class="layer-item" data-layer="cell"><span class="layer-toggle">👁️</span><span
+                        class="layer-name">🔋 电芯主体 (Cells)</span></div>
+                <div class="layer-item" data-layer="busbar"><span class="layer-toggle">👁️</span><span
+                        class="layer-name">⚡ 连接镍片 (Busbars)</span></div>
+                <div class="layer-item" data-layer="ui"><span class="layer-toggle">👁️</span><span class="layer-name">📐
+                        交互与辅助 (UI)</span></div>
             </div>
         </details>
+    </div>
+
+    <div id="network-panel" class="floating-panel"
+        style="display: none; bottom: 100px; right: 30px; width: 280px; transform-origin: bottom right;">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>📡 P2P 联机控制台</span>
+            <button id="btn-close-network"
+                style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:16px;">✖</button>
+        </div>
+        <div style="padding: 10px;">
+            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 5px;">
+                本机联机码: <strong id="my-peer-id" style="color:#10b981; user-select: all; cursor: copy;"
+                    title="点击复制">获取中... ↻</strong>
+            </div>
+            <div style="font-size: 10px; color: #64748b; margin-bottom: 15px;">* 将上方联机码发送给同局域网的同事即可直连</div>
+
+            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                <input type="text" id="target-peer-id" class="layout-input" placeholder="输入对方联机码"
+                    style="flex: 1; padding: 6px; font-size: 12px; text-transform: uppercase;">
+                <button id="btn-connect-peer"
+                    style="width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #0284c7;">连接</button>
+            </div>
+
+            <div style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 10px;">
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 5px;">已连接设备 (Connections)</div>
+                <div id="connected-list" class="layer-list" style="max-height: 120px; overflow-y: auto;">
+                    <div id="no-connection-tip"
+                        style="font-size: 11px; color: #475569; text-align: center; padding: 10px;">暂无连接</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="fab-container" class="fab-container">
+        <div class="fab-menu" id="fab-menu">
+            <button class="fab-item" id="btn-lan-scan" title="打开联机控制台">📡</button>
+            <button class="fab-item" title="通用设置">⚙️</button>
+            <button class="fab-item" title="导出快捷截图">📸</button>
+        </div>
+        <button class="fab-main" id="fab-main" title="展开功能菜单">⌘</button>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-box">
+            <h3 style="margin-top: 0; color: #38bdf8;">🌐 收到直连请求</h3>
+            <p style="font-size: 14px; color: #e2e8f0; margin: 20px 0;">
+                设备 <strong id="req-device-name" style="color: #10b981; font-size: 16px;">未知</strong> <br>请求与您建立 P2P
+                同步连接。
+            </p>
+            <p style="font-size: 11px; color: #94a3b8; margin-bottom: 20px;">同意后，双方对画布的所有修改将实时互传同步。</p>
+            <div style="display: flex; gap: 10px;">
+                <button id="btn-accept-conn" style="background: #10b981; border-color: #059669;">✅ 同意</button>
+                <button id="btn-reject-conn" class="danger">❌ 拒绝</button>
+            </div>
+        </div>
     </div>
 
     <div id="canvas-container">

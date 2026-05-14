@@ -33,13 +33,104 @@ export function initToolbar(renderer) {
     inputV.addEventListener('change', (e) => state.updateSelectedProperties(e.target.value, null));
     inputR.addEventListener('change', (e) => state.updateSelectedProperties(null, e.target.value));
 
-    // ================= 图层面板事件绑定 =================
-    document.querySelectorAll('.layer-item').forEach(item => {
-        item.onclick = () => {
-            const layerName = item.getAttribute('data-layer');
-            state.toggleLayerVisibility(layerName);
+    document.querySelectorAll('.layer-item[data-layer]').forEach(item => {
+        item.onclick = () => state.toggleLayerVisibility(item.getAttribute('data-layer'));
+    });
+
+    // ================= 真实的 WebRTC 联机交互 UI =================
+    const fabContainer = document.getElementById('fab-container');
+    const networkPanel = document.getElementById('network-panel');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const connectedList = document.getElementById('connected-list');
+    let pendingConnection = null;
+
+    // 唤醒联机模块 (在 main.js 中调用 state.initNetwork())
+    eventBus.on('network:ready', (id) => {
+        const idDisplay = document.getElementById('my-peer-id');
+        idDisplay.innerText = id;
+        idDisplay.onclick = () => {
+            navigator.clipboard.writeText(id);
+            idDisplay.innerText = "已复制！";
+            setTimeout(() => idDisplay.innerText = id, 1000);
         };
     });
+
+    // 点击展开圆球菜单
+    document.getElementById('fab-main').onclick = () => fabContainer.classList.toggle('open');
+
+    // 打开控制台
+    document.getElementById('btn-lan-scan').onclick = () => {
+        networkPanel.style.display = networkPanel.style.display === 'none' ? 'block' : 'none';
+        fabContainer.classList.remove('open');
+    };
+    document.getElementById('btn-close-network').onclick = () => networkPanel.style.display = 'none';
+
+    // 主动连接别人
+    document.getElementById('btn-connect-peer').onclick = () => {
+        const targetId = document.getElementById('target-peer-id').value.trim().toUpperCase();
+        if (targetId && targetId !== state.myPeerId) {
+            document.getElementById('btn-connect-peer').innerText = "请求中...";
+            state.connectToPeer(targetId);
+        }
+    };
+
+    // 收到别人的连接请求
+    eventBus.on('network:incoming', (conn) => {
+        pendingConnection = conn;
+        document.getElementById('req-device-name').innerText = conn.peer;
+        modalOverlay.style.display = 'flex';
+    });
+
+    // 同意 / 拒绝
+    document.getElementById('btn-accept-conn').onclick = () => {
+        modalOverlay.style.display = 'none';
+        if (pendingConnection) {
+            state.acceptConnection(pendingConnection);
+            networkPanel.style.display = 'block';
+            pendingConnection = null;
+        }
+    };
+    document.getElementById('btn-reject-conn').onclick = () => {
+        modalOverlay.style.display = 'none';
+        if (pendingConnection) {
+            pendingConnection.close();
+            pendingConnection = null;
+        }
+    };
+
+    // UI更新：连接成功
+    eventBus.on('network:connected', (peerId) => {
+        document.getElementById('btn-connect-peer').innerText = "连接";
+        document.getElementById('no-connection-tip').style.display = 'none';
+
+        // 防止重复添加
+        if (document.getElementById(`conn-${peerId}`)) return;
+
+        const div = document.createElement('div');
+        div.className = 'layer-item';
+        div.id = `conn-${peerId}`;
+        div.style.justifyContent = 'space-between';
+        div.style.borderLeft = '3px solid #10b981';
+        div.innerHTML = `
+            <span style="color:#10b981; font-size:12px; user-select:all;">⚡ ${peerId}</span>
+            <button class="btn-disconnect" style="width:auto; padding: 2px 5px; margin:0; background:#475569; border:none; font-size:10px;">断开</button>
+        `;
+        div.querySelector('.btn-disconnect').onclick = () => {
+            state.disconnectPeer(peerId);
+        };
+        connectedList.appendChild(div);
+    });
+
+    // UI更新：连接断开
+    eventBus.on('network:disconnected', (peerId) => {
+        const el = document.getElementById(`conn-${peerId}`);
+        if (el) el.remove();
+        if (connectedList.children.length === 1) { // 只剩提示语
+            document.getElementById('no-connection-tip').style.display = 'block';
+        }
+    });
+
+    // ==========================================
 
     document.getElementById('tool-pointer').onclick = () => state.setTool('pointer');
     document.getElementById('tool-select-box').onclick = () => state.setTool('select-box');
@@ -52,7 +143,6 @@ export function initToolbar(renderer) {
 
     window.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
         if (e.code === 'Space') { e.preventDefault(); renderer.stage.draggable(true); document.body.classList.add('grabbing-mode'); }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); state.undo(); }
         if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); state.redo(); }
@@ -116,14 +206,10 @@ export function initToolbar(renderer) {
             }
         }
 
-        // ================= 刷新图层悬浮面板的 UI 状态 =================
-        document.querySelectorAll('.layer-item').forEach(item => {
+        document.querySelectorAll('.layer-item[data-layer]').forEach(item => {
             const layerName = item.getAttribute('data-layer');
             const isVisible = ui.layerVisibility[layerName];
-
-            // 切换变灰效果
             item.classList.toggle('hidden-layer', !isVisible);
-            // 切换眼睛/闭眼图标
             item.querySelector('.layer-toggle').innerText = isVisible ? '👁️' : '🙈';
         });
     });
