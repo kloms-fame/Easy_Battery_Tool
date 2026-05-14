@@ -3,7 +3,11 @@ import { eventBus } from './EventBus.js';
 class State {
     constructor() {
         this.doc = { cells: [], busbars: [] };
-        this.ui = { viewMode: 'front', currentTool: 'pointer', isSnapping: false, gridSize: 40, cellRadius: 18, wireStartCell: null, selectedCells: [] };
+        this.ui = {
+            viewMode: 'front', currentTool: 'pointer', isSnapping: false, gridSize: 40, cellRadius: 18, wireStartCell: null, selectedCells: [],
+            // ✅ 新增：多图层显示状态
+            layerVisibility: { cell: true, busbar: true, labels: true, ui: true }
+        };
         this.idCounters = { cell: 1, busbar: 1 };
         this.history = []; this.historyIndex = -1;
         this.clipboard = { cells: [], busbars: [] };
@@ -59,7 +63,6 @@ class State {
         let idMapping = {}; let newSelectedIds = []; const offset = this.ui.gridSize;
         this.clipboard.cells.forEach(c => {
             let newId = `C${this.idCounters.cell++}`; idMapping[c.id] = newId; newSelectedIds.push(newId);
-            // 复制时同时复制电压和内阻
             this.doc.cells.push({ id: newId, cx: c.cx + offset, cy: c.cy + offset, polarity: c.polarity, isLocked: false, voltage: c.voltage, resistance: c.resistance });
             c.cx += offset; c.cy += offset;
         });
@@ -67,7 +70,6 @@ class State {
         this.ui.selectedCells = newSelectedIds; this.commitAction('粘贴');
     }
 
-    // ================= 电芯属性更新 =================
     updateSelectedProperties(voltage, resistance) {
         if (this.ui.selectedCells.length === 0) return;
         this.doc.cells.forEach(c => {
@@ -97,7 +99,6 @@ class State {
                 let offsetX = 0; let offsetY = 0;
                 if (type === 'honeycomb') offsetX = (r % 2 === 1) ? (this.ui.gridSize / 2) : 0;
                 if (type === 'fishscale') offsetY = (c % 2 === 1) ? (this.ui.gridSize / 2) : 0;
-
                 const id = `C${this.idCounters.cell++}`;
                 this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false, voltage: '', resistance: '' });
                 newIds.push(id);
@@ -130,6 +131,12 @@ class State {
                 this.ui.wireStartCell = null; this.notify();
             }
         }
+    }
+
+    // ✅ 新增：图层可见性切换 API
+    toggleLayerVisibility(layerName) {
+        this.ui.layerVisibility[layerName] = !this.ui.layerVisibility[layerName];
+        this.notify(); // 图层显示隐藏只影响 UI，不需要进历史记录
     }
 
     selectCells(cellIds) { this.ui.selectedCells = cellIds; this.notify(); }

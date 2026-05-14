@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pack Architect - 2D CAD v4.0</title>
+    <title>Pack Architect - 2D CAD v4.5</title>
     <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -50,12 +50,12 @@
                 <div style="flex: 1;">
                     <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">电压 (V)</label>
                     <input type="number" id="prop-voltage" class="layout-input" style="width: 100%; padding: 4px;"
-                        step="0.01" placeholder="例如: 3.6">
+                        step="0.01" placeholder="3.6">
                 </div>
                 <div style="flex: 1;">
                     <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">内阻 (mΩ)</label>
                     <input type="number" id="prop-resistance" class="layout-input" style="width: 100%; padding: 4px;"
-                        step="0.1" placeholder="例如: 15.2">
+                        step="0.1" placeholder="15.2">
                 </div>
             </div>
             <div style="font-size: 10px; color: #64748b; margin-top: 5px;">*输入后自动保存，清空可取消显示</div>
@@ -69,13 +69,11 @@
         </div>
 
         <div style="font-size: 11px; color: #64748b; line-height: 1.6;">
-            <strong>高级快捷键:</strong><br>
-            • 鼠标右键/中键：任何工具下平移画布<br>
-            • 空白处拖拽：指针模式下平移画布<br>
-            • Space(长按) / H键：全局强制抓手<br>
-            • Ctrl + 点击：加选/减选电芯<br>
-            • K / 🔒：锁定/解锁选中图元<br>
-            • Delete：删除选中图元
+            <strong>高级操作:</strong><br>
+            • 右键/中键：平移画布<br>
+            • Space(长按) / H键：全局抓手<br>
+            • Ctrl + 点击/框选：叠加选中<br>
+            • K / 🔒：锁定/解锁图元
         </div>
     </div>
 
@@ -95,6 +93,30 @@
         <div class="divider"></div>
         <button class="tool-btn" id="btn-undo" title="撤销 (Ctrl+Z)">↩️</button>
         <button class="tool-btn" id="btn-redo" title="重做 (Ctrl+Y)">↪️</button>
+    </div>
+
+    <div id="layer-panel" class="floating-panel">
+        <details open>
+            <summary class="panel-header">📚 图层系统 (Layers)</summary>
+            <div class="layer-list">
+                <div class="layer-item" data-layer="labels">
+                    <span class="layer-toggle">👁️</span>
+                    <span class="layer-name">🏷️ 属性铭牌 (Labels)</span>
+                </div>
+                <div class="layer-item" data-layer="cell">
+                    <span class="layer-toggle">👁️</span>
+                    <span class="layer-name">🔋 电芯主体 (Cells)</span>
+                </div>
+                <div class="layer-item" data-layer="busbar">
+                    <span class="layer-toggle">👁️</span>
+                    <span class="layer-name">⚡ 连接镍片 (Busbars)</span>
+                </div>
+                <div class="layer-item" data-layer="ui">
+                    <span class="layer-toggle">👁️</span>
+                    <span class="layer-name">📐 交互与辅助 (UI)</span>
+                </div>
+            </div>
+        </details>
     </div>
 
     <div id="canvas-container">

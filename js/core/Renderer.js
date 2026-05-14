@@ -5,7 +5,13 @@ export class Renderer {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.stage = new Konva.Stage({ container: containerId, width: this.container.clientWidth, height: this.container.clientHeight });
-        this.layers = { busbar: new Konva.Layer(), cell: new Konva.Layer(), ui: new Konva.Layer() };
+
+        // 专业的图层管理体系
+        this.layers = {
+            busbar: new Konva.Layer(),
+            cell: new Konva.Layer(),
+            ui: new Konva.Layer()
+        };
         this.stage.add(this.layers.busbar, this.layers.cell, this.layers.ui);
 
         this.selectionRect = new Konva.Rect({ fill: 'rgba(56, 189, 248, 0.2)', stroke: '#38bdf8', strokeWidth: 1, visible: false });
@@ -29,11 +35,9 @@ export class Renderer {
 
         this.stage.on('mousedown', (e) => {
             const tool = state.ui.currentTool;
-            // ✅ 终极平移逻辑：右键、中键、或者使用了专属的抓手(pan)工具、或者在指针模式点在了空白处 —— 全局平移画布！
             if (e.evt.button === 1 || e.evt.button === 2 || tool === 'pan' || (tool === 'pointer' && e.target === this.stage)) {
                 this.stage.draggable(true); return;
             }
-
             if ((tool !== 'select-box' && tool !== 'select-lasso') || e.target !== this.stage) return;
 
             this.isSelecting = true;
@@ -95,7 +99,14 @@ export class Renderer {
     }
 
     renderAll(doc, ui) {
-        this.renderBusbars(doc, ui); this.renderCells(doc, ui);
+        // ✅ 核心魔法：直接控制图层及其内部元素的可见性！
+        this.layers.busbar.visible(ui.layerVisibility.busbar);
+        this.layers.cell.visible(ui.layerVisibility.cell);
+        this.layers.ui.visible(ui.layerVisibility.ui);
+
+        this.renderBusbars(doc, ui);
+        this.renderCells(doc, ui);
+
         const cellEl = document.getElementById('cell-count'); const wireEl = document.getElementById('wire-count');
         if (cellEl) cellEl.innerText = doc.cells.length; if (wireEl) wireEl.innerText = doc.busbars.length;
     }
@@ -151,41 +162,31 @@ export class Renderer {
             cellGroup.on('dragend', () => state.commitAction(ui.selectedCells.length > 1 ? '批量移动' : '移动电芯'));
             cellGroup.on('click', (e) => { if (e.evt.detail === 1 && ui.currentTool !== 'pan') state.handleCellClick(cell.id, e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey); });
 
-            // 视觉发光与基础外壳
             if (isSelected) cellGroup.add(new Konva.Circle({ radius: ui.cellRadius + 6, fill: 'rgba(56, 189, 248, 0.3)', stroke: '#38bdf8', strokeWidth: 2 }));
             const strokeColor = cell.isLocked ? '#475569' : (ui.currentTool === 'wire' && ui.wireStartCell === cell.id ? '#fbbf24' : (displayPolarity === 'positive' ? '#ef4444' : '#3b82f6'));
             cellGroup.add(new Konva.Circle({ radius: ui.cellRadius, fill: displayPolarity === 'positive' ? '#1e293b' : '#334155', stroke: strokeColor, strokeWidth: cell.isLocked ? 2 : (ui.currentTool === 'wire' && ui.wireStartCell === cell.id ? 4 : 2), opacity: cell.isLocked ? 0.7 : 1 }));
-
-            // 极性符号 (缩小稍微向上移动，给文字留空间)
             cellGroup.add(new Konva.Text({ text: displayPolarity === 'positive' ? '+' : '-', fontSize: 18, fontStyle: 'bold', fill: strokeColor, align: 'center', verticalAlign: 'middle', x: -ui.cellRadius, y: -ui.cellRadius - 2, width: ui.cellRadius * 2, height: ui.cellRadius * 2, opacity: cell.isLocked ? 0.5 : 1 }));
 
-            // ================= 新增：图元编号与属性铭牌 =================
+            // ✅ 将文字铭牌装进一个受控的子图层分组中
+            const labelGroup = new Konva.Group({ visible: ui.layerVisibility.labels });
             let labelText = cell.id;
             if (cell.voltage || cell.resistance) {
                 if (cell.voltage) labelText += `\n${cell.voltage}V`;
                 if (cell.resistance) labelText += `\n${cell.resistance}mΩ`;
             }
-
-            cellGroup.add(new Konva.Text({
-                text: labelText,
-                fontSize: 9,
-                fill: '#94a3b8',
-                align: 'center',
-                x: -ui.cellRadius * 2,
-                y: ui.cellRadius + 2,
-                width: ui.cellRadius * 4,
-                lineHeight: 1.1
+            labelGroup.add(new Konva.Text({
+                text: labelText, fontSize: 9, fill: '#94a3b8', align: 'center',
+                x: -ui.cellRadius * 2, y: ui.cellRadius + 2, width: ui.cellRadius * 4, lineHeight: 1.1
             }));
+            cellGroup.add(labelGroup);
 
             if (cell.isLocked) cellGroup.add(new Konva.Text({ text: '🔒', fontSize: 12, x: ui.cellRadius - 10, y: -ui.cellRadius }));
             this.layers.cell.add(cellGroup);
         });
 
-        // 鼠标光标控制
         if (ui.currentTool === 'pan') this.container.style.cursor = 'grab';
         else if (ui.currentTool === 'wire' || ui.currentTool.includes('select')) this.container.style.cursor = 'crosshair';
         else this.container.style.cursor = 'default';
-
         this.layers.cell.draw();
     }
 }

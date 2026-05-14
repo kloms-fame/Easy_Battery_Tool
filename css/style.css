@@ -300,3 +300,81 @@ input[type=number] {
 body.grabbing-mode * {
     cursor: grabbing !important;
 }
+
+
+/* ================= 多图层悬浮面板样式 ================= */
+.floating-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(30, 41, 59, 0.85);
+    /* 半透明背景 */
+    backdrop-filter: blur(8px);
+    /* 毛玻璃效果 (高逼格CAD标配) */
+    border: 1px solid #334155;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    width: 220px;
+}
+
+.floating-panel .panel-header {
+    padding: 10px 15px;
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #38bdf8;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+}
+
+.floating-panel details[open] .panel-header {
+    border-radius: 8px 8px 0 0;
+    border-bottom: 1px solid #334155;
+}
+
+.layer-list {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.layer-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+}
+
+.layer-item:hover {
+    background: #334155;
+}
+
+/* 隐藏图层时的变暗效果 */
+.layer-item.hidden-layer {
+    opacity: 0.4;
+    text-decoration: line-through;
+    color: #94a3b8;
+}
+
+.layer-toggle {
+    margin-right: 12px;
+    font-size: 16px;
+    filter: grayscale(100%);
+    transition: 0.2s;
+}
+
+.layer-item:not(.hidden-layer) .layer-toggle {
+    filter: none;
+}
+
+.layer-name {
+    font-size: 12px;
+    font-weight: 500;
+}
