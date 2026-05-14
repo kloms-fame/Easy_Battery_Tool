@@ -28,12 +28,12 @@ export class Renderer {
         });
 
         this.stage.on('mousedown', (e) => {
-            // ✅ 左键点空白处、中键、右键 —— 直接全局平移画布！
-            if (e.evt.button === 1 || e.evt.button === 2 || (state.ui.currentTool === 'pointer' && e.target === this.stage)) {
+            const tool = state.ui.currentTool;
+            // ✅ 终极平移逻辑：右键、中键、或者使用了专属的抓手(pan)工具、或者在指针模式点在了空白处 —— 全局平移画布！
+            if (e.evt.button === 1 || e.evt.button === 2 || tool === 'pan' || (tool === 'pointer' && e.target === this.stage)) {
                 this.stage.draggable(true); return;
             }
 
-            const tool = state.ui.currentTool;
             if ((tool !== 'select-box' && tool !== 'select-lasso') || e.target !== this.stage) return;
 
             this.isSelecting = true;
@@ -47,7 +47,6 @@ export class Renderer {
         });
 
         this.stage.on('click', (e) => {
-            // 单击空白处，如果没有在拖动，则清空选择
             if (state.ui.currentTool === 'pointer' && e.target === this.stage) state.clearSelection();
         });
 
@@ -59,7 +58,7 @@ export class Renderer {
         });
 
         this.stage.on('mouseup', (e) => {
-            this.stage.draggable(false); // 停止所有画布拖拽
+            this.stage.draggable(false);
             if (!this.isSelecting) return;
             this.isSelecting = false;
             let newlySelectedIds = [];
@@ -70,7 +69,6 @@ export class Renderer {
                 state.doc.cells.forEach(cell => {
                     let renderX = state.ui.viewMode === 'back' ? this.stage.width() - cell.cx : cell.cx;
                     const absX = renderX * this.stage.scaleX() + this.stage.x(); const absY = cell.cy * this.stage.scaleY() + this.stage.y();
-                    // 免疫锁定电芯
                     if (!cell.isLocked && Konva.Util.haveIntersection(box, { x: absX, y: absY, width: 1, height: 1 })) newlySelectedIds.push(cell.id);
                 });
             } else if (tool === 'select-lasso') {
@@ -80,7 +78,6 @@ export class Renderer {
                     if (!cell.isLocked && this.isPointInPolygon(renderX, cell.cy, this.lassoPoints)) newlySelectedIds.push(cell.id);
                 });
             }
-            // Ctrl / Shift 多选叠加逻辑
             if (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey) state.selectCells(Array.from(new Set([...state.ui.selectedCells, ...newlySelectedIds])));
             else state.selectCells(newlySelectedIds);
         });
@@ -124,7 +121,6 @@ export class Renderer {
 
             const cellGroup = new Konva.Group({
                 x: renderX, y: cell.cy, id: cell.id,
-                // ✅ 被锁定的电芯绝不允许拖拽
                 draggable: ui.currentTool === 'pointer' && !cell.isLocked
             });
 
@@ -142,7 +138,6 @@ export class Renderer {
                 let newX = e.target.x(); let dx = (ui.viewMode === 'back' ? this.stage.width() - newX : newX) - this.dragStartPositions[cell.id].cx;
                 let dy = e.target.y() - this.dragStartPositions[cell.id].cy;
                 doc.cells.forEach(c => {
-                    // 同伴跟随移动：排除被锁定的图元
                     if (ui.selectedCells.includes(c.id) && !c.isLocked) {
                         c.cx = this.dragStartPositions[c.id].cx + dx; c.cy = this.dragStartPositions[c.id].cy + dy;
                         if (c.id !== cell.id) {
@@ -154,24 +149,43 @@ export class Renderer {
                 this.renderBusbars(doc, ui);
             });
             cellGroup.on('dragend', () => state.commitAction(ui.selectedCells.length > 1 ? '批量移动' : '移动电芯'));
+            cellGroup.on('click', (e) => { if (e.evt.detail === 1 && ui.currentTool !== 'pan') state.handleCellClick(cell.id, e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey); });
 
-            cellGroup.on('click', (e) => { if (e.evt.detail === 1) state.handleCellClick(cell.id, e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey); });
-
-            // 视觉高光
+            // 视觉发光与基础外壳
             if (isSelected) cellGroup.add(new Konva.Circle({ radius: ui.cellRadius + 6, fill: 'rgba(56, 189, 248, 0.3)', stroke: '#38bdf8', strokeWidth: 2 }));
-
-            // 锁定状态下的视觉反馈 (变灰)
             const strokeColor = cell.isLocked ? '#475569' : (ui.currentTool === 'wire' && ui.wireStartCell === cell.id ? '#fbbf24' : (displayPolarity === 'positive' ? '#ef4444' : '#3b82f6'));
             cellGroup.add(new Konva.Circle({ radius: ui.cellRadius, fill: displayPolarity === 'positive' ? '#1e293b' : '#334155', stroke: strokeColor, strokeWidth: cell.isLocked ? 2 : (ui.currentTool === 'wire' && ui.wireStartCell === cell.id ? 4 : 2), opacity: cell.isLocked ? 0.7 : 1 }));
-            cellGroup.add(new Konva.Text({ text: displayPolarity === 'positive' ? '+' : '-', fontSize: 22, fontStyle: 'bold', fill: strokeColor, align: 'center', verticalAlign: 'middle', x: -ui.cellRadius, y: -ui.cellRadius + 2, width: ui.cellRadius * 2, height: ui.cellRadius * 2, opacity: cell.isLocked ? 0.5 : 1 }));
 
-            // 🔒 锁头图标
+            // 极性符号 (缩小稍微向上移动，给文字留空间)
+            cellGroup.add(new Konva.Text({ text: displayPolarity === 'positive' ? '+' : '-', fontSize: 18, fontStyle: 'bold', fill: strokeColor, align: 'center', verticalAlign: 'middle', x: -ui.cellRadius, y: -ui.cellRadius - 2, width: ui.cellRadius * 2, height: ui.cellRadius * 2, opacity: cell.isLocked ? 0.5 : 1 }));
+
+            // ================= 新增：图元编号与属性铭牌 =================
+            let labelText = cell.id;
+            if (cell.voltage || cell.resistance) {
+                if (cell.voltage) labelText += `\n${cell.voltage}V`;
+                if (cell.resistance) labelText += `\n${cell.resistance}mΩ`;
+            }
+
+            cellGroup.add(new Konva.Text({
+                text: labelText,
+                fontSize: 9,
+                fill: '#94a3b8',
+                align: 'center',
+                x: -ui.cellRadius * 2,
+                y: ui.cellRadius + 2,
+                width: ui.cellRadius * 4,
+                lineHeight: 1.1
+            }));
+
             if (cell.isLocked) cellGroup.add(new Konva.Text({ text: '🔒', fontSize: 12, x: ui.cellRadius - 10, y: -ui.cellRadius }));
             this.layers.cell.add(cellGroup);
         });
 
-        if (ui.currentTool === 'wire' || ui.currentTool.includes('select')) this.container.style.cursor = 'crosshair';
+        // 鼠标光标控制
+        if (ui.currentTool === 'pan') this.container.style.cursor = 'grab';
+        else if (ui.currentTool === 'wire' || ui.currentTool.includes('select')) this.container.style.cursor = 'crosshair';
         else this.container.style.cursor = 'default';
+
         this.layers.cell.draw();
     }
 }

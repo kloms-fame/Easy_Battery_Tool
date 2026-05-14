@@ -284,3 +284,19 @@ select.layout-input option {
 body.grabbing-mode * {
     cursor: grabbing !important;
 }
+
+/* 隐藏 input[type="number"] 的原生增减箭头，使其更专业 */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* 强制抓手模式的鼠标样式 */
+body.grabbing-mode * {
+    cursor: grabbing !important;
+}

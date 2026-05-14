@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Pack Architect - 2D CAD v3.5</title>
+    <title>Pack Architect - 2D CAD v4.0</title>
     <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -41,6 +41,26 @@
             </div>
         </details>
 
+        <div class="panel-section" id="panel-properties"
+            style="display: none; background: #0f172a; padding: 10px; border-radius: 6px; border: 1px solid #38bdf8;">
+            <div class="section-title" style="color: #38bdf8;">图元属性 (Properties)</div>
+            <div style="font-size: 12px; margin-bottom: 10px; color: #cbd5e1; font-weight: bold;"
+                id="prop-selection-info">未选中图元</div>
+            <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">电压 (V)</label>
+                    <input type="number" id="prop-voltage" class="layout-input" style="width: 100%; padding: 4px;"
+                        step="0.01" placeholder="例如: 3.6">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">内阻 (mΩ)</label>
+                    <input type="number" id="prop-resistance" class="layout-input" style="width: 100%; padding: 4px;"
+                        step="0.1" placeholder="例如: 15.2">
+                </div>
+            </div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 5px;">*输入后自动保存，清空可取消显示</div>
+        </div>
+
         <div class="panel-section">
             <div class="section-title">文件与数据</div>
             <button id="btn-export">💾 导出 JSON 项目</button>
@@ -50,10 +70,10 @@
 
         <div style="font-size: 11px; color: #64748b; line-height: 1.6;">
             <strong>高级快捷键:</strong><br>
-            • 空白处拖拽：直接平移画布<br>
-            • Space(长按)：全局强制抓手<br>
+            • 鼠标右键/中键：任何工具下平移画布<br>
+            • 空白处拖拽：指针模式下平移画布<br>
+            • Space(长按) / H键：全局强制抓手<br>
             • Ctrl + 点击：加选/减选电芯<br>
-            • 框选 + Ctrl：叠加选中区域<br>
             • K / 🔒：锁定/解锁选中图元<br>
             • Delete：删除选中图元
         </div>
@@ -66,6 +86,7 @@
                 <button class="tool-btn sub-btn" id="tool-select-box" title="矩形框选 (B)">🔲</button>
                 <button class="tool-btn sub-btn" id="tool-select-lasso" title="套索框选 (L)">〽️</button>
                 <button class="tool-btn sub-btn" id="tool-polarity" title="极性反转 (P)">🔄</button>
+                <button class="tool-btn sub-btn" id="tool-pan" title="全局抓手 (H)">✋</button>
             </div>
         </div>
         <button class="tool-btn" id="tool-wire" title="镍片连线笔 (W)">✏️</button>

@@ -27,13 +27,12 @@ class State {
     importProject(jsonData) {
         try { const data = JSON.parse(jsonData); if (data.doc && data.idCounters) { this.doc = data.doc; this.idCounters = data.idCounters; this.clearSelection(); this.commitAction('导入项目'); return true; } } catch (e) { console.error(e); } return false;
     }
-    saveToLocal() { localStorage.setItem('packArchitectProject_V3', JSON.stringify({ doc: this.doc, idCounters: this.idCounters })); }
+    saveToLocal() { localStorage.setItem('packArchitectProject_V4', JSON.stringify({ doc: this.doc, idCounters: this.idCounters })); }
     loadFromLocal() {
-        const dataStr = localStorage.getItem('packArchitectProject_V3');
+        const dataStr = localStorage.getItem('packArchitectProject_V4');
         if (dataStr) { try { const data = JSON.parse(dataStr); this.doc = data.doc; this.idCounters = data.idCounters; return true; } catch (e) { return false; } } return false;
     }
 
-    // ================= 高级锁定与操作 =================
     toggleLockSelected() {
         if (this.ui.selectedCells.length === 0) return;
         const allLocked = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id)).every(c => c.isLocked);
@@ -44,7 +43,7 @@ class State {
     deleteSelected() {
         if (this.ui.selectedCells.length === 0) return;
         const cellsToDelete = this.doc.cells.filter(c => this.ui.selectedCells.includes(c.id) && !c.isLocked).map(c => c.id);
-        if (cellsToDelete.length === 0) return; // 全是锁定的，啥也删不掉
+        if (cellsToDelete.length === 0) return;
         this.doc.cells = this.doc.cells.filter(c => !cellsToDelete.includes(c.id));
         this.doc.busbars = this.doc.busbars.filter(b => !cellsToDelete.includes(b.from) && !cellsToDelete.includes(b.to));
         this.ui.selectedCells = this.ui.selectedCells.filter(id => !cellsToDelete.includes(id));
@@ -60,25 +59,35 @@ class State {
         let idMapping = {}; let newSelectedIds = []; const offset = this.ui.gridSize;
         this.clipboard.cells.forEach(c => {
             let newId = `C${this.idCounters.cell++}`; idMapping[c.id] = newId; newSelectedIds.push(newId);
-            this.doc.cells.push({ id: newId, cx: c.cx + offset, cy: c.cy + offset, polarity: c.polarity, isLocked: false });
+            // 复制时同时复制电压和内阻
+            this.doc.cells.push({ id: newId, cx: c.cx + offset, cy: c.cy + offset, polarity: c.polarity, isLocked: false, voltage: c.voltage, resistance: c.resistance });
             c.cx += offset; c.cy += offset;
         });
         this.clipboard.busbars.forEach(b => { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: idMapping[b.from], to: idMapping[b.to] }); });
         this.ui.selectedCells = newSelectedIds; this.commitAction('粘贴');
     }
 
-    addCell(x, y) { this.doc.cells.push({ id: `C${this.idCounters.cell++}`, cx: x, cy: y, polarity: 'positive', isLocked: false }); this.commitAction('添加电芯'); }
+    // ================= 电芯属性更新 =================
+    updateSelectedProperties(voltage, resistance) {
+        if (this.ui.selectedCells.length === 0) return;
+        this.doc.cells.forEach(c => {
+            if (this.ui.selectedCells.includes(c.id)) {
+                if (voltage !== null) c.voltage = voltage;
+                if (resistance !== null) c.resistance = resistance;
+            }
+        });
+        this.commitAction('修改图元属性');
+    }
+
+    addCell(x, y) { this.doc.cells.push({ id: `C${this.idCounters.cell++}`, cx: x, cy: y, polarity: 'positive', isLocked: false, voltage: '', resistance: '' }); this.commitAction('添加电芯'); }
     clearAll() { this.doc.cells = []; this.doc.busbars = []; this.idCounters = { cell: 1, busbar: 1 }; this.ui.wireStartCell = null; this.commitAction('清空画布'); }
     removeBusbar(index) { if (this.ui.currentTool === 'pointer') { this.doc.busbars.splice(index, 1); this.commitAction('删除连线'); } }
 
-    // ================= 追加生成引擎 (多预设) =================
     generateLayout(type, s, p, centerX, centerY) {
         let newIds = [];
         const hexStep = this.ui.gridSize * (Math.sqrt(3) / 2);
         const rowHeight = type === 'matrix' ? this.ui.gridSize : hexStep;
         const colWidth = type === 'fishscale' ? hexStep : this.ui.gridSize;
-
-        // 基于传入的视觉中心计算起点
         const startX = centerX - (p * colWidth) / 2;
         const startY = centerY - (s * rowHeight) / 2;
 
@@ -90,13 +99,11 @@ class State {
                 if (type === 'fishscale') offsetY = (c % 2 === 1) ? (this.ui.gridSize / 2) : 0;
 
                 const id = `C${this.idCounters.cell++}`;
-                this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false });
+                this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false, voltage: '', resistance: '' });
                 newIds.push(id);
             }
         }
-        this.ui.selectedCells = newIds; // 追加生成后自动选中
-        this.ui.currentTool = 'pointer'; // 切回指针，方便立刻拖走
-        this.commitAction(`追加生成 ${s}S${p}P ${type}`);
+        this.ui.selectedCells = newIds; this.ui.currentTool = 'pointer'; this.commitAction(`追加生成 ${s}S${p}P ${type}`);
     }
 
     handleCellClick(id, isMultiSelect = false) {
