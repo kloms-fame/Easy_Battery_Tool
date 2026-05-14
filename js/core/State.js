@@ -158,6 +158,30 @@ class State {
     clearAll() { this.doc.cells = []; this.doc.busbars = []; this.idCounters = { cell: 1, busbar: 1 }; this.ui.wireStartCell = null; this.commitAction('清空画布'); }
     removeBusbar(index) { if (this.ui.currentTool === 'pointer') { this.doc.busbars.splice(index, 1); this.commitAction('删除连线'); } }
     generateLayout(type, s, p, centerX, centerY) { let newIds = []; const hexStep = this.ui.gridSize * (Math.sqrt(3) / 2); const rowHeight = type === 'matrix' ? this.ui.gridSize : hexStep; const colWidth = type === 'fishscale' ? hexStep : this.ui.gridSize; const startX = centerX - (p * colWidth) / 2; const startY = centerY - (s * rowHeight) / 2; for (let r = 0; r < s; r++) { const polarity = (r % 2 === 0) ? 'positive' : 'negative'; for (let c = 0; c < p; c++) { let offsetX = 0; let offsetY = 0; if (type === 'honeycomb') offsetX = (r % 2 === 1) ? (this.ui.gridSize / 2) : 0; if (type === 'fishscale') offsetY = (c % 2 === 1) ? (this.ui.gridSize / 2) : 0; const id = `C${this.idCounters.cell++}`; this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false, voltage: '', resistance: '' }); newIds.push(id); } } this.ui.selectedCells = newIds; this.ui.currentTool = 'pointer'; this.commitAction(`生成 ${s}S${p}P`); }
+    // 🌟 新增：极速滑动连焊逻辑
+    quickConnect(targetId) {
+        if (!this.ui.wireStartCell || this.ui.wireStartCell === targetId) return false;
+
+        // 检查当前视角（正面或反面）是否已经存在这条线
+        const exists = this.doc.busbars.some(b =>
+            ((b.from === this.ui.wireStartCell && b.to === targetId) ||
+                (b.from === targetId && b.to === this.ui.wireStartCell)) &&
+            b.side === this.ui.viewMode
+        );
+
+        if (!exists) {
+            this.doc.busbars.push({
+                id: `B${this.idCounters.busbar++}`,
+                from: this.ui.wireStartCell,
+                to: targetId,
+                side: this.ui.viewMode // 严格记录属于哪一面
+            });
+            this.ui.wireStartCell = targetId; // 核心：将终点变成新的起点，准备迎接下一次滑动
+            this.commitAction('滑动连线');
+            return true;
+        }
+        return false;
+    }
     handleCellClick(id, isMultiSelect = false) { const cell = this.doc.cells.find(c => c.id === id); if (!cell) return; if (this.ui.currentTool === 'pointer') { if (isMultiSelect) { if (this.ui.selectedCells.includes(id)) this.ui.selectedCells = this.ui.selectedCells.filter(c => c !== id); else this.ui.selectedCells.push(id); } else { this.ui.selectedCells = [id]; } this.notify(); } else if (this.ui.currentTool === 'polarity' && !cell.isLocked) { cell.polarity = cell.polarity === 'positive' ? 'negative' : 'positive'; this.commitAction('翻转极性'); } else if (this.ui.currentTool === 'wire') { if (!this.ui.wireStartCell) { this.ui.wireStartCell = id; this.notify(); } else { if (this.ui.wireStartCell !== id) { const exists = this.doc.busbars.some(b => (b.from === this.ui.wireStartCell && b.to === id) || (b.from === id && b.to === this.ui.wireStartCell)); if (!exists) { this.doc.busbars.push({ id: `B${this.idCounters.busbar++}`, from: this.ui.wireStartCell, to: id, side: this.ui.viewMode }); this.ui.wireStartCell = null; this.commitAction('添加连线'); return; } } this.ui.wireStartCell = null; this.notify(); } } }
     toggleLayerVisibility(layerName) { this.ui.layerVisibility[layerName] = !this.ui.layerVisibility[layerName]; this.notify(); }
     selectCells(cellIds) { this.ui.selectedCells = cellIds; this.notify(); }

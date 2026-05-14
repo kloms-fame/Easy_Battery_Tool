@@ -108,6 +108,24 @@ export class Renderer {
             const tool = state.ui.currentTool;
             if (e.evt.button === 1 || e.evt.button === 2 || tool === 'pan' || (tool === 'pointer' && e.target === this.stage)) { this.stage.draggable(true); return; }
 
+            // 🌟 新增：触发滑动连焊的初始点
+            if (tool === 'wire') {
+                const pointer = this.stage.getRelativePointerPosition();
+                let absoluteX = state.ui.viewMode === 'back' ? this.stage.width() - pointer.x : pointer.x;
+
+                // 查找按下的位置是否落在某个电芯上
+                const clickedCell = state.doc.cells.find(c => {
+                    return Math.sqrt(Math.pow(c.cx - absoluteX, 2) + Math.pow(c.cy - pointer.y, 2)) <= state.ui.cellRadius;
+                });
+
+                if (clickedCell && !clickedCell.isLocked) {
+                    this.isWiring = true;
+                    state.ui.wireStartCell = clickedCell.id;
+                    state.notify(); // 触发高亮
+                }
+                return;
+            }
+
             this.selectionStartPos = this.stage.getRelativePointerPosition();
 
             if (tool === 'measure') {
@@ -141,6 +159,22 @@ export class Renderer {
                 lastCursorTime = Date.now();
             }
 
+            // 🌟 核心修复：把滑动连焊的检测放在真正的“滑动(pointermove)”事件里！
+            if (this.isWiring && state.ui.wireStartCell) {
+                const targetCell = state.doc.cells.find(c => {
+                    // 增加 5 像素判定冗余，让手机端触控更容易吸附
+                    return Math.sqrt(Math.pow(c.cx - absoluteX, 2) + Math.pow(c.cy - pos.y, 2)) <= state.ui.cellRadius + 5;
+                });
+
+                // 划过一个新的未锁定电芯时，瞬间触发点焊！
+                if (targetCell && targetCell.id !== state.ui.wireStartCell && !targetCell.isLocked) {
+                    state.quickConnect(targetCell.id);
+                }
+                return;
+            }
+
+
+
             if (this.isMeasuring) {
                 this.measureLine.points([this.selectionStartPos.x, this.selectionStartPos.y, pos.x, pos.y]);
                 const dx = pos.x - this.selectionStartPos.x; const dy = pos.y - this.selectionStartPos.y;
@@ -156,7 +190,16 @@ export class Renderer {
         });
 
         this.stage.on('mouseup touchend', (e) => {
+            // 🌟 抬手结束连焊
+            if (this.isWiring) {
+                this.isWiring = false;
+                state.ui.wireStartCell = null;
+                state.notify();
+                return;
+            }
             this.stage.draggable(false);
+
+
 
             if (this.isMeasuring) { this.isMeasuring = false; this.measureLine.visible(false); this.measureText.visible(false); return; }
 
@@ -228,7 +271,11 @@ export class Renderer {
     renderBusbars(doc, ui) {
         this.layers.busbar.destroyChildren();
         doc.busbars.forEach((bar, index) => {
-            const cell1 = doc.cells.find(c => c.id === bar.from); const cell2 = doc.cells.find(c => c.id === bar.to);
+            // 🌟 核心拦截：如果这条线不属于当前视角，直接跳过不渲染，实现正反面隔离！
+            if (bar.side && bar.side !== ui.viewMode) return;
+
+            const cell1 = doc.cells.find(c => c.id === bar.from);
+            const cell2 = doc.cells.find(c => c.id === bar.to);
             if (!cell1 || !cell2) return;
             let x1 = ui.viewMode === 'back' ? this.stage.width() - cell1.cx : cell1.cx; let x2 = ui.viewMode === 'back' ? this.stage.width() - cell2.cx : cell2.cx;
 

@@ -204,7 +204,9 @@ export function initToolbar(renderer) {
             // 5. 生成硬件参数 TXT 文档
             let textData = "⚡ PACK ARCHITECT - 制造参数核对表 ⚡\n========================================\n\n";
             const a = state.analysis;
-            textData += `[电学逻辑推断]\n拓扑架构: ${a.s}S${a.p}P\n额定总电压: ${a.v} V\n评估总内阻: ${a.r} mΩ\n状态: ${a.isShorted ? '严重短路！不可制造！' : '拓扑正常'}\n\n`;
+            textData += `[电学逻辑推断]\n拓扑架构: ${a.s}S${a.p}P\n额定总电压: ${a.v} V\n评估总内阻: ${a.r} mΩ\n`;
+            textData += `孤立遗漏电芯: ${a.orphanCount} UNIT\n`;
+            textData += `状态: ${a.isShorted ? '严重短路！不可制造！' : (a.orphanCount > 0 ? '存在漏焊风险' : '拓扑正常')}\n\n`;
             textData += "[电芯详细矩阵]\nID\t| 电压 (V)\t| 内阻 (mΩ)\n----------------------------------------\n";
             state.doc.cells.forEach(c => textData += `${c.id}\t| ${c.voltage || '未测'}\t\t| ${c.resistance || '未测'}\n`);
 
@@ -217,13 +219,29 @@ export function initToolbar(renderer) {
     eventBus.on('state:changed', ({ doc, ui, history, historyIndex, analysis }) => {
         // ... 原有的 UI 更新代码 ...
 
-        // 🌟 更新底部状态栏（智能计算结果）
         if (analysis) {
-            let statsText = `当前拓扑: ${analysis.connectedCount} 节已连接 | 架构推测: ${analysis.s}S${analysis.p}P | 理论电压: ${analysis.v}V`;
-            if (analysis.isShorted) statsText = "⛔ 严重短路，数据异常！";
-            safelySetText('pack-stats', statsText);
+            let statsText = '';
+            let statsColor = '#fbbf24';
 
-            // 触发防爆弹窗
+            if (analysis.isShorted) {
+                statsText = "⛔ 严重短路！";
+                statsColor = '#ef4444';
+            } else if (analysis.orphanCount > 0 && doc.cells.length > 0) {
+                statsText = `⚠️ 检测到 ${analysis.orphanCount} 个漏焊电芯!`;
+                statsColor = '#f97316';
+            } else if (analysis.connectedCount > 0) {
+                statsText = `✅ ${analysis.s}S${analysis.p}P (${analysis.v}V)`;
+                statsColor = '#10b981';
+            } else {
+                statsText = "未建立电路";
+            }
+
+            const packStatsEl = document.getElementById('pack-stats');
+            if (packStatsEl) {
+                packStatsEl.innerText = statsText;
+                packStatsEl.style.color = statsColor;
+            }
+
             const modal = document.getElementById('short-circuit-modal');
             if (modal) modal.style.display = analysis.isShorted ? 'flex' : 'none';
         }
