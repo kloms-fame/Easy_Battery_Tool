@@ -38,6 +38,17 @@ export function initToolbar(renderer) {
         });
     }
     document.getElementById('btn-add-cell').onclick = () => state.addCell((renderer.stage.width() / 2 - renderer.stage.x()) / renderer.stage.scaleX(), (renderer.stage.height() / 2 - renderer.stage.y()) / renderer.stage.scaleY());
+
+    // 🌟 智能物理重编号（带确认弹窗）
+    const btnRenumber = document.getElementById('btn-renumber');
+    if (btnRenumber) {
+        btnRenumber.onclick = () => {
+            if (confirm('⚡ 确定要执行全自动智能编号吗？\n\n系统将自动扫描电芯阵列，严格按照“从上到下、从左到右”的空间顺序，将所有电芯强制整理为 C1 到 C' + state.doc.cells.length + ' 的连续编号。')) {
+                state.smartRenumberCells();
+            }
+        };
+    }
+
     document.getElementById('btn-clear').onclick = () => state.clearAll();
     document.getElementById('btn-snap').onclick = () => state.toggleSnap();
     document.getElementById('btn-view').onclick = () => state.toggleViewMode();

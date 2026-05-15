@@ -215,6 +215,52 @@ class State {
     }
     removeBusbar(index) { if (this.ui.currentTool === 'pointer') { this.doc.busbars.splice(index, 1); this.commitAction('删除连线'); } }
     generateLayout(type, s, p, centerX, centerY) { let newIds = []; const hexStep = this.ui.gridSize * (Math.sqrt(3) / 2); const rowHeight = type === 'matrix' ? this.ui.gridSize : hexStep; const colWidth = type === 'fishscale' ? hexStep : this.ui.gridSize; const startX = centerX - (p * colWidth) / 2; const startY = centerY - (s * rowHeight) / 2; for (let r = 0; r < s; r++) { const polarity = (r % 2 === 0) ? 'positive' : 'negative'; for (let c = 0; c < p; c++) { let offsetX = 0; let offsetY = 0; if (type === 'honeycomb') offsetX = (r % 2 === 1) ? (this.ui.gridSize / 2) : 0; if (type === 'fishscale') offsetY = (c % 2 === 1) ? (this.ui.gridSize / 2) : 0; const id = `C${this.idCounters.cell++}`; this.doc.cells.push({ id, cx: startX + c * colWidth + offsetX, cy: startY + r * rowHeight + offsetY, polarity: polarity, isLocked: false, voltage: '', resistance: '' }); newIds.push(id); } } this.ui.selectedCells = newIds; this.ui.currentTool = 'pointer'; this.commitAction(`生成 ${s}S${p}P`); }
+    // 🌟 新增：全自动空间启发式重编号引擎
+    smartRenumberCells() {
+        if (this.doc.cells.length === 0) return;
+
+        // 1. 空间排序：从上到下，从左到右 (允许15px物理对齐公差)
+        let sortedCells = [...this.doc.cells].sort((a, b) => {
+            if (Math.abs(a.cy - b.cy) > 15) {
+                return a.cy - b.cy;
+            }
+            return a.cx - b.cx;
+        });
+
+        // 2. 旧ID → 新ID 映射
+        let idMap = {};
+        sortedCells.forEach((c, index) => {
+            let newId = `C${index + 1}`;
+            idMap[c.id] = newId;
+            c.id = newId;
+        });
+
+        // 3. 替换回文档
+        this.doc.cells = sortedCells;
+
+        // 4. 修复连线
+        this.doc.busbars.forEach(b => {
+            if (idMap[b.from]) b.from = idMap[b.from];
+            if (idMap[b.to]) b.to = idMap[b.to];
+        });
+
+        // 5. 修复 BMS 采样线
+        if (this.doc.bmsWires) {
+            this.doc.bmsWires.forEach(bw => {
+                if (idMap[bw.cellId]) bw.cellId = idMap[bw.cellId];
+            });
+        }
+
+        // 6. 重置计数器
+        this.idCounters.cell = this.doc.cells.length + 1;
+
+        // 7. 清空选中状态
+        this.ui.selectedCells = [];
+        this.ui.wireStartCell = null;
+
+        // 8. 提交历史
+        this.commitAction('智能重编号');
+    }
     // 🌟 新增：极速滑动连焊逻辑
     quickConnect(targetId) {
         if (!this.ui.wireStartCell || this.ui.wireStartCell === targetId) return false;
